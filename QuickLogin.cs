@@ -122,9 +122,7 @@ public sealed class QuickLoginWindow : Form
                 if (state == "Cancelled") throw new InvalidOperationException("You cancelled this sign-in in Roblox. Close this window and start again.");
                 if (state != "Validated") continue;
                 var cookie = await login.Redeem(cancellation.Token); redeemed = true;
-                var account = await app.Api.Identify(cookie);
-                cancellation.Token.ThrowIfCancellationRequested();
-                app.Vault.Merge([account]); app.Log($"Added or refreshed @{account.Username} using default browser sign-in."); Close(); return;
+                await app.AcceptSession(cookie, "using default browser sign-in", cancellation.Token); Close(); return;
             }
             status.Text = "This code expired. Close this window and choose Default browser again for a new code.";
         }

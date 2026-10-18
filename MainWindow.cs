@@ -31,8 +31,9 @@ public sealed class MainWindow : Form
             return completion.Task;
         };
         app.Changed += Push;
+        app.AccountAccepted += FocusAcceptedAccount;
         Load += async (_, _) => await Initialize();
-        FormClosing += (_, _) => { closing = true; app.Changed -= Push; app.Vault.Save(); };
+        FormClosing += (_, _) => { closing = true; app.Changed -= Push; app.AccountAccepted -= FocusAcceptedAccount; app.Vault.Save(); };
     }
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
     private async Task Initialize()
@@ -130,6 +131,7 @@ public sealed class MainWindow : Form
         }
     }
     private void Reply(object result) { if (!closing && Input.TrustedOrigin(view.Source?.AbsoluteUri ?? "")) view.CoreWebView2.PostWebMessageAsJson(Json.Write(result)); }
+    private void FocusAcceptedAccount(Guid id) => Reply(new { type = "accountAccepted", id });
     private object? Import(JsonElement p)
     {
         using var dialog = new OpenFileDialog { Title = "Import accounts or an Orbit backup", Filter = "Account data|*.json;*.backup;*.orbit;*.dat|All files|*.*" };

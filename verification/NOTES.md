@@ -1,4 +1,12 @@
-# Current verification (0.2.1)
+# Current verification (0.2.2)
+
+The embedded add-account browser now validates and saves automatically on the signed-in Roblox home page, while retaining the manual Use this account fallback. It waits for browser cookies, tries distinct session candidates only for rejected sessions, avoids repeated automatic attempts for unchanged cookies, and cancels saving if the window is closed. Failures are displayed in a larger banner and logged with candidate-session redaction.
+
+All three sign-in entry points share acceptance logic. A validated refreshed entry has its error cleared and status updated instead of being reset to Unchecked. Aliases, groups and notes survive. Acceptance returns the dashboard to Accounts, clears filters and selects the saved account so it cannot remain hidden by the previous view.
+
+Local tests: 32 xUnit cases passed, including the 42-condition UI suite at both widths, successful/refused/cancelled sign-in acceptance, metadata preservation, landing-page checks, and native table visibility with stale filters. An isolated native AccountBrowser test used a synthetic HttpOnly cookie, a locally intercepted home page and mocked identity responses to exercise automatic capture through vault save and browser close. It did not use a real password or sign in to a live account. The two opt-in live launch/public search cases were skipped for this fix; previous scoped results remain below.
+
+# Verification (0.2.1)
 
 Fixed the Places search input being restored to its previous submitted query during background state refreshes. The input now maintains a separate draft on each input event. Search completion updates result state without replacing newer typing, and redraws preserve the full selection range.
 

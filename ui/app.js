@@ -18,6 +18,7 @@ function call(action,payload={}) {
 bridge?.addEventListener('message',event=>{
   const m=event.data;
   if(m.type==='state'){state=m.data;selected=new Set([...selected].filter(id=>state.accounts.some(a=>a.id===id)));render();}
+  if(m.type==='accountAccepted'){page='accounts';query='';group='';selected=new Set([m.id]);render();toast('Account saved and validated.');}
   if(m.type==='result'){const p=pending.get(m.id);if(!p)return;clearTimeout(p.timer);pending.delete(m.id);m.ok?p.resolve(m.data):p.reject(Error(m.error));}
 });
 function toast(text,error=false){const node=document.createElement('div');node.className='toast'+(error?' error':'');node.textContent=text;$('#toasts').append(node);setTimeout(()=>node.remove(),6500);}

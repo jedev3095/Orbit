@@ -11,7 +11,7 @@ Download the app ZIP from Releases, extract the **entire archive** into one fold
 Choose **Add account**:
 
 - **Default browser tab** opens Roblox Quick Login in your normal browser, where existing password-manager extensions are available. Enter the code shown by Orbit, review the account and approve. Orbit then saves the resulting session. If Roblox redirects to sign-in first, choose Open browser again afterward or open Roblox Settings → Quick Login.
-- **Orbit browser window** opens a separate browser profile. Sign in, then choose **Use this account**. An optional Bitwarden popup can load extension code from supported installed Chromium browsers, with its own Orbit profile and independent sign-in.
+- **Orbit browser window** opens a separate browser profile. Finish signing in and any verification; when Roblox opens its home page, Orbit validates the session, saves the account and selects it in the table automatically. **Use this account** remains available as a manual retry. Failed validation is shown in the browser and Activity. An optional Bitwarden popup can load extension code from supported installed Chromium browsers, with its own Orbit profile and independent sign-in.
 - **Session cookie** accepts an existing session belonging to you.
 
 Select exactly one account and choose **Open browser** above the table to browse using that saved session. Repeating the action brings its account window forward. An expired or revoked session requires signing in again; re-adding the same user refreshes its session while retaining aliases, groups and notes.

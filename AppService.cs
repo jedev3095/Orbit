@@ -12,6 +12,7 @@ public sealed class AppService : IDisposable
     public List<Activity> Activity { get; } = [];
     public bool IsDemo { get; }
     public event Action? Changed;
+    public event Action<Guid>? AccountAccepted;
     public ControlServer? Server { get; private set; }
     public Func<Func<Task<object?>>, Task<object?>> Dispatch { get; set; } = work => work();
     private MultiInstanceGuard? multi;
@@ -43,6 +44,21 @@ public sealed class AppService : IDisposable
         try { await Dispatch(() => { if (ReferenceEquals(Server, source)) { Server = null; source.Dispose(); Log($"Local API listener stopped unexpectedly ({error.GetType().Name}, 0x{error.HResult:X8}). Save local control settings to restart it.", "error"); } return Task.FromResult<object?>(null); }); } catch { source.Dispose(); }
     }
     public void Notify() => Changed?.Invoke();
+    public async Task<Account> AcceptSession(string cookie, string source, CancellationToken cancellation = default)
+    {
+        RequireLive();
+        var identified = await Api.Identify(Input.Cookie(cookie));
+        cancellation.ThrowIfCancellationRequested();
+        Vault.Merge([identified]);
+        var stored = Vault.Data.Accounts.Single(a => a.UserId == identified.UserId);
+        bool identityChanged = stored.Username != identified.Username || stored.DisplayName != identified.DisplayName;
+        stored.Username = identified.Username; stored.DisplayName = identified.DisplayName;
+        stored.Status = identified.Status; stored.LastError = "";
+        if (identityChanged) Vault.Save();
+        Log($"Added or refreshed @{stored.Username} {source}.");
+        AccountAccepted?.Invoke(stored.Id);
+        return stored;
+    }
     public void Log(string message, string kind = "info")
     {
         message = Diagnostics.Redact(message, [Vault.Data.Settings.ApiToken, .. Vault.Data.Accounts.Select(a => a.SecurityToken)]);
@@ -79,8 +95,7 @@ public sealed class AppService : IDisposable
             case "backupNow": await Backups.RunNow(); return null;
             case "addCookie":
                 RequireLive();
-                var added = await Api.Identify(Input.Cookie(Text("cookie")));
-                Vault.Merge([added]); Log($"Added or refreshed @{added.Username}."); return null;
+                await AcceptSession(Text("cookie"), "from a session cookie"); return null;
             case "editAccount":
                 var a = Target(); a.Alias = Text("alias").Trim()[..Math.Min(Text("alias").Trim().Length, 50)];
                 a.Group = Text("group", "Default").Trim(); if (a.Group.Length == 0) a.Group = "Default";
