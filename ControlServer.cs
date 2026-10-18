@@ -11,12 +11,16 @@ public sealed class ControlServer : IDisposable
 {
     private readonly AppService app;
     private readonly HttpListener listener = new();
-    private readonly byte[] token;
+    private byte[] token;
+    private Task? loop;
+    public bool IsRunning => !lifetime.IsCancellationRequested && listener.IsListening && loop is { IsCompleted: false };
     private readonly CancellationTokenSource lifetime = new();
     private readonly ConcurrentDictionary<Guid, WebSocket> clients = new();
     public int Port { get; }
     public ControlServer(AppService app, int port, string token) { this.app = app; Port = port; this.token = Encoding.UTF8.GetBytes("Bearer " + token); listener.Prefixes.Add($"http://127.0.0.1:{port}/"); }
-    public void Start() { listener.Start(); _ = Loop(); }
+    public void Start() { listener.Start(); loop = Loop(); }
+    public void RotateToken(string value) { Volatile.Write(ref token, Encoding.UTF8.GetBytes("Bearer " + value)); foreach (var socket in clients.Values) socket.Dispose(); clients.Clear(); }
+    internal void InterruptListener() => listener.Stop();
     public bool Connected(Guid id) => clients.TryGetValue(id, out var socket) && socket.State == WebSocketState.Open;
     public static bool Authorized(byte[] expected, string? supplied)
     {
@@ -29,7 +33,7 @@ public sealed class ControlServer : IDisposable
         {
             try { var c = await listener.GetContextAsync(); _ = Handle(c); }
             catch when (lifetime.IsCancellationRequested) { break; }
-            catch { break; }
+            catch (Exception ex) { await app.ListenerFailed(this, ex); break; }
         }
     }
     private async Task Reply(HttpListenerContext c, int status, object data)
@@ -44,7 +48,8 @@ public sealed class ControlServer : IDisposable
     {
         try
         {
-            if (!c.Request.IsLocal || !Authorized(token, c.Request.Headers["Authorization"])) { await Reply(c, 401, new { error = "Unauthorized" }); return; }
+            if (!string.Equals(c.Request.Headers["Host"], $"127.0.0.1:{Port}", StringComparison.OrdinalIgnoreCase)) { await Reply(c, 403, new { error = "Unexpected Host header." }); return; }
+            if (!c.Request.IsLocal || !Authorized(Volatile.Read(ref token), c.Request.Headers["Authorization"])) { await Reply(c, 401, new { error = "Unauthorized" }); return; }
             if (c.Request.Headers["Origin"] is not null) { await Reply(c, 403, new { error = "Browser-origin requests are not accepted." }); return; }
             string path = c.Request.Url!.AbsolutePath;
             if (path == "/Nexus" && c.Request.IsWebSocketRequest) { await Socket(c); return; }
@@ -60,10 +65,12 @@ public sealed class ControlServer : IDisposable
             var result = await app.Dispatch(() => app.Command(action, p));
             await Reply(c, 200, new { ok = true, result });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            if (!lifetime.IsCancellationRequested) { try { await app.Dispatch(() => { app.Log(ex is JsonException ? "Local API request contained invalid JSON." : "Local API request failed. Check account IDs and request parameters.", "warning"); return Task.FromResult<object?>(null); }); } catch { } }
             try { await Reply(c, 400, new { error = "Request failed. Check account IDs, parameters, and the activity log." }); } catch { }
         }
+        finally { try { c.Response.Close(); } catch { } }
     }
     private async Task Socket(HttpListenerContext c)
     {
@@ -100,5 +107,5 @@ public sealed class ControlServer : IDisposable
         foreach (var id in ids) if (clients.TryGetValue(id, out var socket) && socket.State == WebSocketState.Open) { await socket.SendAsync(Encoding.UTF8.GetBytes(message), WebSocketMessageType.Text, true, lifetime.Token); sent++; }
         if (sent == 0) throw new InvalidOperationException("None of the selected accounts has a connected Nexus client.");
     }
-    public void Dispose() { lifetime.Cancel(); listener.Close(); foreach (var socket in clients.Values) socket.Dispose(); clients.Clear(); }
+    public void Dispose() { if (lifetime.IsCancellationRequested) return; lifetime.Cancel(); listener.Close(); foreach (var socket in clients.Values) socket.Dispose(); clients.Clear(); }
 }

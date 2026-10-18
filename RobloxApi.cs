@@ -105,5 +105,36 @@ public sealed class RobloxApi : IDisposable
         return game;
     }
     public Task<JsonNode> Servers(long place, string cursor) => Public($"https://games.roblox.com/v1/games/{place}/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=25&cursor={Uri.EscapeDataString(cursor)}");
+    public async Task<PlaceSearchPage> SearchPlaces(string query, string cursor = "", string session = "")
+    {
+        query = query.Trim();
+        if (query.Length is < 2 or > 100 || cursor.Length > 2048) throw new ArgumentException("Search using 2–100 characters.");
+        string sessionId = Guid.TryParse(session, out var id) ? id.ToString() : Guid.NewGuid().ToString();
+        var response = await Public($"https://apis.roblox.com/search-api/omni-search?searchQuery={Uri.EscapeDataString(query)}&pageType=games&sessionId={sessionId}&pageToken={Uri.EscapeDataString(cursor)}");
+        var games = new List<Game>();
+        foreach (var group in response["searchResults"]?.AsArray() ?? [])
+        {
+            if (group?["contentGroupType"]?.GetValue<string>() != "Game") continue;
+            foreach (var item in group["contents"]?.AsArray() ?? [])
+            {
+                long place = item?["rootPlaceId"]?.GetValue<long>() ?? 0, universe = item?["universeId"]?.GetValue<long>() ?? 0;
+                if (place <= 0 || universe <= 0 || games.Any(g => g.PlaceId == place)) continue;
+                games.Add(new() { PlaceId = place, UniverseId = universe, Name = item?["name"]?.GetValue<string>() ?? "Experience", Creator = item?["creatorName"]?.GetValue<string>() ?? "", Players = item?["playerCount"]?.GetValue<long>() ?? 0 });
+                if (games.Count == 40) break;
+            }
+            if (games.Count == 40) break;
+        }
+        if (games.Count > 0)
+        {
+            try
+            {
+                var icons = await Public($"https://thumbnails.roblox.com/v1/games/icons?universeIds={string.Join(',', games.Select(g => g.UniverseId))}&returnPolicy=PlaceHolder&size=256x256&format=Png&isCircular=false");
+                foreach (var item in icons["data"]?.AsArray() ?? []) { var game = games.FirstOrDefault(g => g.UniverseId == item?["targetId"]?.GetValue<long>()); if (game is not null) game.Image = item?["imageUrl"]?.GetValue<string>() ?? ""; }
+            }
+            catch { }
+        }
+        return new(games, response["nextPageToken"]?.GetValue<string>() ?? "", sessionId);
+    }
     public void Dispose() => http.Dispose();
 }
+public record PlaceSearchPage(List<Game> Games, string NextPageToken, string SessionId);

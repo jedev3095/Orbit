@@ -1,4 +1,15 @@
-# Verification
+# Current verification (0.2.0)
+
+18 October 2026, Windows x64, .NET 8, installed WebView2 runtime.
+
+- Local test run: 23 xUnit cases passed with native UI and public search enabled; the one live-launch case passed in its separate explicitly authorized run. The UI harness checked 38 conditions at both widths. NuGet reported no vulnerable application dependencies, including transitive packages. Release build has no warnings or errors. The production assembly excludes test runner classes, test fixtures, command-line test modes and JS smoke functions. Version metadata comes from the assembly.
+- xUnit regressions cover PID reuse/name/start-time rejection, unrelated-process stop prevention, independent relaunch delays and a three-attempt backoff cap, listener survival after bad requests, Host rejection, token invalidation, listener failure state, password-field discard, activity debounce, backup retention/encryption/reload, vault recovery atomicity and place search/pagination. The earlier 72 checks now run inside the test assembly.
+- Native WebView checks pass at normal and narrow widths, including selected-account browsers, place search/results and choosing a launch target, token rotation/backup controls and the accounts-only import warning. Screenshots remain in ignored test output, not the repository.
+- The public search integration test returned the requested Natural Disaster Survival result with root place 189707. This used no account cookies. Search results and optional thumbnails remain dependent on Roblox's public APIs.
+- **Live two-client test passed:** two explicitly selected saved sessions were authenticated before either launch. Both launched distinct RobloxPlayerBeta processes, matched to Orbit's trackers with start-time/name identity checks, and stayed alive concurrently for a 15-second observation. The full test lasted 26 seconds. The guard held both singleton names. Afterward only the two verified test-owned clients were stopped; their temporary encrypted test vault and activity were removed. Account identifiers, cookies, tickets and process command lines were excluded from this record. Process survival does not independently prove in-game state or private/follow mode correctness.
+
+# Historical verification (0.1.x)
+
 
 18 October 2026, Windows x64, .NET SDK 8.0.422, WebView2 Runtime 155.0.4283.60.
 

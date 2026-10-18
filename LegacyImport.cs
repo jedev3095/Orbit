@@ -29,7 +29,7 @@ public static class LegacyImport
                 Username = node?["Username"]?.GetValue<string>() ?? node?["username"]?.GetValue<string>() ?? "",
                 SecurityToken = node?["SecurityToken"]?.GetValue<string>() ?? node?["securityToken"]?.GetValue<string>() ?? "",
                 Alias = node?["Alias"]?.GetValue<string>() ?? "", Description = node?["Description"]?.GetValue<string>() ?? "",
-                Group = node?["Group"]?.GetValue<string>() ?? "Default", Password = node?["Password"]?.GetValue<string>() ?? "",
+                Group = node?["Group"]?.GetValue<string>() ?? "Default",
                 Fields = node?["Fields"]?.Deserialize<Dictionary<string, string>>(Json.Options) ?? []
             }).ToList();
         }

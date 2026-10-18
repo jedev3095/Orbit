@@ -66,7 +66,7 @@ public static class SelfTests
             Reject("Remote popup URL rejected", () => BitwardenIntegration.PopupUrl(bitwardenId, "https://example.com/"));
             Reject("Cookie header injection rejected", () => Input.Cookie(cookie + "\r\nHeader: value"));
             var vault = new Vault(dir);
-            var account = new Account { UserId = 42, Username = "offline-test", SecurityToken = cookie, Password = "private-password", Fields = new() { ["note"] = "value" } };
+            var account = new Account { UserId = 42, Username = "offline-test", SecurityToken = cookie, Fields = new() { ["note"] = "value" } };
             Check("First merge adds account", vault.Merge([account]) == 1);
             var stored = File.ReadAllBytes(vault.FilePath);
             Check("Vault stores encrypted content", !Encoding.UTF8.GetString(stored).Contains(cookie) && !Encoding.UTF8.GetString(stored).Contains("private-password"));
@@ -107,6 +107,7 @@ public static class SelfTests
                 Check("Expired session shows Needs login", account.Status == "Needs login" && account.LastError.Contains("HTTP 401"));
                 Check("Expired session is rejected before ticket or client launch", unauthorizedRequests == 1 && account.ProcessId is null);
                 Check("Launch error never contains saved credentials", !Json.Write(failingApp.State()).Contains(cookie));
+                failingApp.FlushActivityAsync().GetAwaiter().GetResult();
                 Check("Activity persists actionable error", File.ReadAllText(Path.Combine(dir, "activity.json")).Contains("HTTP 401"));
             }
             using (var restoredApp = new AppService(vault)) Check("Activity restored on restart", restoredApp.Activity.Any(a => a.Message.Contains("HTTP 401")));

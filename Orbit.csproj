@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>Orbit</AssemblyName>
-    <Version>0.1.5</Version>
+    <Version>0.2.0</Version>
     <ApplicationIcon>assets\orbit.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
@@ -15,9 +15,6 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <PackageReference Include="libsodium" Version="1.0.22" />
     <Content Include="ui\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <EmbeddedResource Include="testdata\bitwarden-manifest.json" />
+    <Compile Remove="Orbit.Tests\**\*.cs" />
   </ItemGroup>
-  <Target Name="RemoveUnusedWebViewWpf" BeforeTargets="ResolveAssemblyReferences">
-    <ItemGroup><Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" /></ItemGroup>
-  </Target>
 </Project>

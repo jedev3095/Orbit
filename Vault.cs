@@ -35,12 +35,13 @@ public sealed class Vault
         }
         finally { CryptographicOperations.ZeroMemory(plain); }
     }
-    public byte[] Export(string password)
+    public byte[] Export(string password) => EncodeBackup(Data, password);
+    public static byte[] EncodeBackup(Database data, string password)
     {
         if (password.Length < 12) throw new ArgumentException("Use a backup password of at least 12 characters.");
         byte[] salt = RandomNumberGenerator.GetBytes(16), nonce = RandomNumberGenerator.GetBytes(12);
         var key = Rfc2898DeriveBytes.Pbkdf2(password, salt, 600000, HashAlgorithmName.SHA256, 32);
-        var plain = Encoding.UTF8.GetBytes(Json.Write(Data));
+        var plain = Encoding.UTF8.GetBytes(Json.Write(data));
         var cipher = new byte[plain.Length]; var tag = new byte[16];
         try { using var aes = new AesGcm(key, 16); aes.Encrypt(nonce, plain, cipher, tag, Magic); }
         finally { CryptographicOperations.ZeroMemory(key); CryptographicOperations.ZeroMemory(plain); }
@@ -59,6 +60,19 @@ public sealed class Vault
         }
         catch (CryptographicException) { throw new InvalidDataException("Wrong backup password or damaged backup."); }
         finally { CryptographicOperations.ZeroMemory(key); CryptographicOperations.ZeroMemory(plain); }
+    }
+    public void RestorePrevious()
+    {
+        string backup = FilePath + ".backup";
+        var bytes = File.ReadAllBytes(backup);
+        var plain = ProtectedData.Unprotect(bytes, Entropy, DataProtectionScope.CurrentUser);
+        Database recovered;
+        try { recovered = Json.Read<Database>(Encoding.UTF8.GetString(plain)); }
+        finally { CryptographicOperations.ZeroMemory(plain); }
+        // Validate before touching the damaged file. Keep both the damaged copy
+        // and the known-good backup for manual recovery.
+        if (File.Exists(FilePath)) File.Copy(FilePath, FilePath + ".unreadable-" + Guid.NewGuid().ToString("N"));
+        File.WriteAllBytes(FilePath + ".restore", bytes); File.Move(FilePath + ".restore", FilePath, true); Data = recovered;
     }
     public int Merge(IEnumerable<Account> accounts)
     {

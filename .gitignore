@@ -24,3 +24,7 @@ BrowsersWithExtensions/
 ExtensionPackages/
 *.orbit
 *.backup
+backup-policy.*
+**/TestResults/
+verification/**/*.png
+verification/*.png

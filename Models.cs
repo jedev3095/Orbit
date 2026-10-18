@@ -22,10 +22,11 @@ public sealed class Account
     public string Description { get; set; } = "";
     public string Group { get; set; } = "Default";
     public Dictionary<string, string> Fields { get; set; } = [];
-    public string Password { get; set; } = "";
     public DateTime? LastUse { get; set; }
     public long PlaceId { get; set; }
     public string JobId { get; set; } = "";
+    public string LaunchMode { get; set; } = "game";
+    public long FollowUserId { get; set; }
     public bool AutoRelaunch { get; set; }
     public int RelaunchSeconds { get; set; } = 60;
     [JsonIgnore] public string Status { get; set; } = "Unchecked";
@@ -34,6 +35,9 @@ public sealed class Account
     [JsonIgnore] public string Thumbnail { get; set; } = "";
     [JsonIgnore] public string Tracker { get; set; } = "";
     [JsonIgnore] public int? ProcessId { get; set; }
+    [JsonIgnore] public DateTime? ProcessStartedUtc { get; set; }
+    [JsonIgnore] public string ProcessName { get; set; } = "";
+    [JsonIgnore] public int RelaunchAttempts { get; set; }
 }
 
 public sealed class Settings
@@ -57,6 +61,7 @@ public sealed class Game
     public string Creator { get; set; } = "";
     public bool Favorite { get; set; }
     public string Image { get; set; } = "";
+    public long Players { get; set; }
     public DateTime LastPlayed { get; set; } = DateTime.UtcNow;
 }
 

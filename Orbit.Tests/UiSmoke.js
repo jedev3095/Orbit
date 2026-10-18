@@ -1,0 +1,31 @@
+window.orbitSmoke=async()=>{
+  const tests=[];const assert=(name,value)=>{tests.push({name,passed:!!value});if(!value)throw Error('UI assertion failed: '+name);};
+  assert('Relay color palette',getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()==='#91b6ee');assert('horizontal top tabs',document.querySelector('header nav')!==null);assert('control pane beside table',!!document.querySelector('.account-controls')&&!!document.querySelector('.accounts-panel'));assert('sample accounts rendered',document.querySelectorAll('[data-select]').length===7);
+  const malicious={...state.accounts[0],id:'xss-check',displayName:'<img src=x onerror=alert(1)>',alias:'<script>bad()</script>'};state.accounts.push(malicious);render();assert('names escaped',!document.querySelector('[onerror]'));state.accounts.pop();render();
+  assert('account browser requires a selection',$('[data-action="browserSelected"]').disabled);
+  const checkbox=document.querySelector('[data-select]');checkbox.click();assert('account selection',selected.size===1);
+  assert('account browser enabled for one selected account',!$('[data-action="browserSelected"]').disabled);
+  const opened=await click('browserSelected',{dataset:{}});assert('browser action targets the selected account',opened.accountId===[...selected][0]);
+  $('#search').value='northbound';$('#search').dispatchEvent(new Event('input',{bubbles:true}));assert('search filters rows',document.querySelectorAll('[data-select]').length===1);query='';render();
+  for(const p of ['games','control','activity','settings']){page=p;render();assert(p+' view renders',!!$('#main h1'));assert(p+' view fits horizontally',$('#main').scrollWidth<=$('#main').clientWidth);}
+  page='games';render();assert('place browser accepts a name',!!$('#place-query'));$('#place-query').value='Natural Disaster';await searchPlaces();assert('search renders places from native bridge',!!$('.search-results [data-action="pickGame"]'));assert('search has save and pagination controls',!!$('.search-results [data-action="savePlace"]')&&!!$('[data-action="morePlaces"]'));await click('pickGame',$('.search-results [data-action="pickGame"]'));assert('choosing a result fills the launch place',launch.placeId==='189707'&&page==='accounts');
+  page='settings';render();assert('token rotation and daily backup controls exist',!!$('[data-action="rotateTokenModal"]')&&!!$('[data-action="scheduleBackups"]'));backupModal(false);assert('import dialog explains accounts-only restore',$('#modal').textContent.includes('Games and settings stay unchanged'));$('#modal').close();assert('multi-instance reports disabled state',$('#multi-status').textContent.includes('off'));
+  state.settings.multiInstance=true;state.multiInstanceReady=true;render();assert('multi-instance reports active guard',$('#multi-status').textContent.includes('ready'));
+  state.multiInstanceReady=false;state.multiInstanceError='Close all Roblox clients <test>';render();assert('multi-instance activation error is visible and escaped',$('#multi-status').textContent.includes('Close all Roblox clients <test>')&&!$('#multi-status test'));state.settings.multiInstance=false;state.multiInstanceError='';
+  page='accounts';render();editModal(state.accounts[0].id);$('#edit-alias').value='Main account';await click('saveAccount',{dataset:{}});assert('bridge edit succeeded',!$('#modal').open);
+  state.accounts[0].status='Needs login';state.accounts[0].lastError='Roblox rejected the saved session (HTTP 401). Sign in again.';render();document.querySelector('[data-action="showError"]').click();assert('expired session has actionable error dialog',$('#modal').open&&!!$('#modal [data-action="add"]')&&$('#modal').textContent.includes('HTTP 401'));$('#modal').close();state.accounts[0].status='Offline';state.accounts[0].lastError='';render();
+  addModal();assert('both browser choices are visible',!!$('#modal [data-action="loginExternal"]')&&!!$('#modal [data-action="login"]'));await click('loginExternal',{dataset:{}});assert('default browser choice dispatches through native bridge',!$('#modal').open);addModal();await click('login',{dataset:{}});assert('embedded browser choice dispatches through native bridge',!$('#modal').open);
+  const result=await call('state');assert('bridge state omits credentials',!JSON.stringify(result).includes('SAMPLE_ACCOUNT_NO_REAL_CREDENTIALS')&&!Object.hasOwn(result.accounts[0],'securityToken'));
+  selected.add(state.accounts[1].id);launch.placeId='4924922222';render();assert('no horizontal overflow',document.documentElement.scrollWidth<=innerWidth);assert('table pane fits viewport',$('.accounts-panel').scrollWidth<=$('.accounts-panel').clientWidth);assert('tabs report active page',$('nav [data-page="accounts"]').getAttribute('aria-pressed')==='true');
+  document.querySelectorAll('[data-group]')[1].click();assert('group filter works',visible().every(a=>a.group===group)&&visible().length>0);document.querySelector('[data-group=""]').click();assert('all accounts filter restores rows',visible().length===7);
+  document.querySelectorAll('.toast').forEach(t=>t.remove());return {passed:tests.every(t=>t.passed),tests,sampleData:true,width:innerWidth,height:innerHeight};
+};
+window.orbitSmokeEmpty=async()=>{
+  const tests=[];const assert=(name,value)=>{tests.push({name,passed:!!value});if(!value)throw Error('UI assertion failed: '+name);};
+  assert('empty vault contains no fabricated accounts',state.accounts.length===0&&document.querySelectorAll('[data-select]').length===0);
+  assert('empty state offers add account',document.querySelectorAll('[data-action="add"]').length===2);
+  addModal();assert('default browser, embedded browser and cookie choices available',!!document.querySelector('[data-action="loginExternal"]')&&!!document.querySelector('[data-action="login"]')&&!!document.querySelector('[data-action="cookieModal"]'));$('#modal').close();
+  for(const p of ['games','control','activity','settings']){page=p;render();assert('empty '+p+' page renders',!!$('#main h1'));}
+  page='accounts';render();assert('narrow viewport has no horizontal overflow',document.documentElement.scrollWidth<=innerWidth);
+  return {passed:tests.every(t=>t.passed),tests,sampleData:false,width:innerWidth,height:innerHeight};
+};

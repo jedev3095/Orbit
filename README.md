@@ -1,97 +1,81 @@
 # Orbit
 
-A Windows desktop remake of the main Roblox Account Manager workflows, with a compact WebView2 interface styled after the Relay app and a native C# backend. The interface uses Relay's charcoal palette, muted blue accent, horizontal tabs, left control pane, and dense table layout. Version 0.1 is a working foundation; it is not yet a complete replacement for every advanced feature in the old application.
+A Windows Roblox account manager with a charcoal WebView2 dashboard, an encrypted local vault and separate account browser sessions. The interface is styled after Relay. Orbit is an independent application, unaffiliated with Roblox.
 
-Version 0.1.5 adds the generated Orbit app icon and a direct Open browser action for the selected account. Version 0.1.4 updates multi-instance handling for both Roblox singleton names, detects conflicts and reports readiness in Settings. Version 0.1.3 adds a choice of default browser sign-in or the separate Orbit browser window.
+## Run
 
-## Start
+Download the app ZIP from Releases, extract the **entire archive** into one folder and run `Orbit.exe`. Keep the DLLs and `ui` folder beside it. Requires .NET Desktop Runtime 8 and Microsoft Edge WebView2 Runtime. Local published builds belong in `app/` or `publish/`; they are ignored by Git.
 
-Extract the **whole Orbit-app ZIP** into a folder and run `Orbit.exe`. Keep its DLLs and `ui` folder alongside it. This build uses .NET Desktop Runtime 8 and Microsoft Edge WebView2 Runtime, both present on the development PC. Run as a standard Windows user.
+## Accounts and browser sessions
 
-Your first real workspace is empty. The screenshots under `verification` show explicitly labeled sample accounts. No existing Roblox Account Manager files are opened automatically.
+Choose **Add account**:
 
-Choose **Add account** and select where to sign in:
+- **Default browser tab** opens Roblox Quick Login in your normal browser, where existing password-manager extensions are available. Enter the code shown by Orbit, review the account and approve. Orbit then saves the resulting session. If Roblox redirects to sign-in first, choose Open browser again afterward or open Roblox Settings → Quick Login.
+- **Orbit browser window** opens a separate browser profile. Sign in, then choose **Use this account**. An optional Bitwarden popup can load extension code from supported installed Chromium browsers, with its own Orbit profile and independent sign-in.
+- **Session cookie** accepts an existing session belonging to you.
 
-- **Default browser tab** opens Roblox Quick Login in your normal browser, where your existing Bitwarden extension is available. Orbit shows a short-lived code. Sign in to Roblox if needed, enter that code, review the account and approve the sign-in. Orbit then adds or refreshes the account automatically. Keep the Orbit sign-in window open while approving. The browser may choose an existing window or a new tab according to its own settings. If the page redirects to sign-in, use **Open browser** again afterward, or open Roblox Settings → Quick Login. Closing an uncompleted attempt cancels its code. Orbit reads no existing browser cookies, password databases or Bitwarden vault data.
-- **Orbit browser window** keeps the previous embedded workflow: sign in, then choose **Use this account** in its toolbar. Browser profiles stay separate from your default browser. If Bitwarden's extension code is installed in a supported Chromium browser, Orbit can load it into its own profile; its Bitwarden button opens a separate extension popup where you sign in independently. The original extension data is not imported.
-- **Add a session cookie** accepts a session you already own.
+Select exactly one account and choose **Open browser** above the table to browse using that saved session. Repeating the action brings its account window forward. An expired or revoked session requires signing in again; re-adding the same user refreshes its session while retaining aliases, groups and notes.
 
-Refresh retrieves account details and presence. Roblox can reject a session or require additional verification; Orbit displays the failure rather than bypassing verification.
+Authentication uses `.ROBLOSECURITY`. Orbit does not store account passwords, including password fields from old imports. Existing historical encrypted backups can still contain fields written by older versions.
 
-Select accounts, enter a place ID and optionally a server/job ID, then launch them. The game library can retrieve experience details and public servers from a place ID. Private-server mode takes a link code; current compatibility of the recovered launch protocol needs real-account testing. Queued launches can be cancelled; an in-flight Roblox request may finish first.
+## Places and launching
 
-If a saved session has expired, the table shows **Needs login**. Click that status for the detailed error and a **Sign in with Roblox** action. A successful sign-in refreshes the existing account entry by user ID; aliases, groups, and notes remain. Decrypting an old import does not guarantee its saved sessions are still valid. Launches validate the session before requesting a ticket or closing a previously tracked process.
+In **Places**, search by experience name and choose **Use place** to fill the launch target automatically, or **Save** to keep it in your library. Results include thumbnails and player counts, with More results for pagination. Add by ID remains available. Public server selection is available for saved places. Search requests use Roblox's public API without account cookies.
 
-## Included
+Select accounts and launch the chosen experience. Follow mode has a separate user ID; private-server mode requires a link code. Batch launches can be cancelled. Orbit verifies saved sessions before requesting a launch ticket and before stopping any previous tracked process.
 
-- Account sign-in windows with separate browser profiles, cookie import, aliases, groups, notes, and custom fields.
-- Search, selection, presence/balance refresh, batch launching, public server selection, private/follow launch modes, favorites, and a game library.
-- Windows-account encrypted storage, password-encrypted portable backups, and explicit import of old JSON/DPAPI/password-encrypted account files.
-- Tracked process control, optional multi-instance handling, per-account auto-relaunch settings, and window position storage/restoration.
-- Account tools for profile/balance/blocked-user reads, display-name updates, block/unblock, friendship requests, and quick-login authorization. Roblox API changes or verification requirements may limit an operation.
-- A session activity log, privacy setting, two accent colors, a token-authenticated local HTTP API, and basic authenticated Nexus messaging.
+For multiple clients, close existing Roblox clients and other instance managers, enable **Settings → Multiple Roblox instances**, save, and confirm **Multi-instance ready** before launching. Keep Orbit open while playing. The guard holds both singleton names and reports conflicts instead of silently claiming readiness. It never closes foreign process handles or patches Roblox.
 
-Open an account's options from its name or the three-dot button. Expand **Relaunch and custom fields** to set its relaunch place ID and job ID. Orbit stops and monitors only processes whose unique browser tracker can be matched to its own launch; if process inspection is denied, it records that limitation instead of guessing which process to close.
+Only an exact tracked Roblox PID, process start time and process name can be stopped or have its window moved. Process handles are pinned and checked immediately before acting. Orbit does not guess which client to stop. Unknown launches are marked unverified and do not trigger extra automatic launches.
 
-Select exactly one account and click **Open browser** above the table to browse Roblox using its saved session. Each account opens in a separate Orbit browser profile; repeating the action brings its existing window forward. The same action is available in Account options. An expired session still requires signing in again. This account browser uses the embedded window so it can apply the selected account's session independently of your normal browser.
+Automatic relaunches run independently per account, with up to three attempts and exponential delays. A client that runs for two minutes resets its retry budget. Repeated failures show **Relaunch gave up**; manually launching resets the budget. Removing an account, disabling auto-relaunch or stopping it cancels pending retries.
 
-## Multiple Roblox clients
+## Vault, recovery and backups
 
-Close all Roblox clients and any other multi-instance manager. Open Orbit, enable **Settings → Multiple Roblox instances**, then **Save changes**. Settings must report **Multi-instance ready** before you launch the accounts. Keep Orbit open while playing. If it reports a conflict, close the existing clients/managers and save Settings again. No existing game is automatically stopped to enable this feature. A queue containing several accounts requires this setting.
+The vault is `%LOCALAPPDATA%\Orbit\vault.dat`, protected by Windows DPAPI for the current user. Separate WebView profiles also live under that local folder. No accounts are read from other applications automatically. Activity retains the latest 200 entries, redacts known credentials, and saves after a 1.5-second debounce with a final shutdown flush.
 
-Orbit holds `ROBLOX_singletonMutex` and reserves `ROBLOX_singletonEvent` as a mutex before Roblox starts. Version 0.1.3 and earlier held only the first name and could silently fail when Roblox already owned an object. The new guard acquires and releases both objects on one dedicated thread. This handles the observed singleton objects on this PC; future Roblox changes may require further compatibility work.
+Each vault save retains a previous `vault.dat.backup`. If the primary vault cannot be opened, the recovery screen offers restoring that backup. Recovery validates it before replacing anything and preserves a copy of the unreadable original. DPAPI vaults require the original Windows account. A lost backup password cannot be recovered.
 
-## Vault and imports
+**Settings → Set up daily backups** is opt-in. Choose a folder and a password of at least 12 characters. Orbit creates encrypted exports daily while open, catching up on its next startup when due, and keeps the latest seven exports belonging to that configured schedule. The schedule password is DPAPI-protected locally and is excluded from the account vault and its portable exports. Back up now and Disable schedule are also available. Keep your own copy of the password for recovery elsewhere.
 
-The real vault and separate WebView profiles live under `%LOCALAPPDATA%\Orbit`. The vault uses current-user Windows DPAPI. `vault.dat.backup` retains the previous save. The separate browser profiles retain their own browser session data; removing a vault entry does not delete those browser folders.
-
-The last 200 activity entries are retained in `activity.json` in that folder. Saved cookies, passwords, API tokens, and launch tickets are redacted from generated launch errors. Account names and action descriptions remain visible for troubleshooting.
-
-Export creates an `.orbit` backup using PBKDF2-SHA256 (600,000 iterations), a random salt, and AES-256-GCM. Use a password of at least 12 characters. Keep the password separately: a forgotten backup password cannot be recovered through Orbit.
-
-Import prompts for a file rather than scanning for accounts. Supported old formats were reconstructed from the local 3.6.1 executable: plaintext account JSON, Windows DPAPI using the original entropy, and the password format using SHA-512, Argon2i Moderate, and libsodium SecretBox. Synthetic fixtures cover these formats; real 3.7.2 data has not been inspected. DPAPI files may need the original Windows installation/account. Imports merge by Roblox user ID and refresh duplicate session tokens; they do not overwrite existing aliases/groups. Orbit backup imports currently merge accounts only, not game-library or settings data.
+Portable exports use PBKDF2-SHA256 (600,000 iterations) and AES-256-GCM. They contain the database snapshot, including games and settings. **The ordinary Import dialog merges accounts only; it leaves games and settings unchanged.** This limitation is shown before choosing the file. Existing old JSON/DPAPI/password-encrypted AccountData formats remain supported. Files needing the original Windows account must be imported there. Removing an account from the vault does not remove its browser profile or historical backups.
 
 ## Local control API
 
-Enable **Settings → Local controls** and save. The listener binds only to `127.0.0.1`, default port 7963. Copy its token using the native clipboard button. Every HTTP request and Nexus handshake needs:
+Enable Local controls in Settings. The listener binds to `127.0.0.1` only, default port 7963. Every HTTP request and Nexus handshake requires `Authorization: Bearer <access token>`. Requests must use `Host: 127.0.0.1:<port>`. Browser Origin headers are rejected. No cookie-export endpoint exists.
 
-```text
-Authorization: Bearer <access token>
-```
-
-No cookie-export endpoint exists. Browser-origin requests are rejected and no CORS permission is granted.
+Use **Regenerate token** to invalidate the previous token and disconnect existing Nexus clients. Copy the replacement from Settings. A listener failure is logged and reflected in its status; save local control settings to restart it. Bad individual requests do not stop the listener.
 
 | Endpoint | Request |
 | --- | --- |
-| `GET /v1/state` | Returns account metadata, IDs, settings without tokens, and activity. |
+| `GET /v1/state` | Account metadata, settings and activity without credentials. |
 | `POST /v1/refresh` | `{"ids":["account-guid"]}` |
-| `POST /v1/launch` | `{"ids":["account-guid"],"placeId":4924922222,"jobId":"","mode":"game"}` |
+| `POST /v1/launch` (game) | `{"ids":["account-guid"],"placeId":189707,"mode":"game"}` |
+| `POST /v1/launch` (follow) | `{"ids":["account-guid"],"userId":123,"mode":"follow"}` |
+| `POST /v1/launch` (private) | `{"ids":["account-guid"],"placeId":189707,"jobId":"link-code","mode":"private"}` |
 | `POST /v1/stop` | `{"ids":["account-guid"]}` |
 | `ws://127.0.0.1:7963/Nexus?accountId=<guid>` | Authenticated WebSocket connection. |
 
-Nexus accepts `{"Name":"ping"}` and answers `pong`; `{"Name":"Log","Payload":{"Content":"message"}}` adds a log entry. The Account control view sends user-entered text commands to selected clients. It does not install a Roblox client, execute code inside Roblox, or implement the old Nexus dynamic-widget/auto-execute protocol. Existing integrations need the new authentication and account GUID.
+Follow requests must omit placeId (or set it to zero); game/private requests must omit userId. Nexus supports ping/pong, log messages and user-entered text commands to connected clients. It does not inject a client or implement the old dynamic-widget/auto-execute protocol.
 
-## Remaining parity work
-
-The old application's automatic updater, custom browser JavaScript actions, bulk username/password login automation, avatar editor, password/email/PIN/privacy utilities, detailed server geolocation, legacy UWP paths, FPS/client-settings patcher, and full Nexus dynamic UI protocol have not been ported. There is no release feed for Orbit yet; it never runs the original app's updater. These are explicit gaps, not nonfunctional buttons in the UI.
-
-This build has not been tested with live Roblox credentials, a game launch, or a real account mutation. The legacy mutex and authentication-ticket launch flow may no longer work with current Roblox clients. A completed feature-by-feature replacement will require those integration checks and the remaining ports.
-
-## Build and verify
+## Build and tests
 
 Use the .NET 8 SDK on Windows:
 
 ```powershell
-dotnet build .\Orbit.csproj -c Release
-dotnet publish .\Orbit.csproj -c Release -r win-x64 --self-contained false -o ..\Orbit-app
+dotnet build Orbit.csproj -c Release
+dotnet test Orbit.Tests/Orbit.Tests.csproj -c Release
+dotnet publish Orbit.csproj -c Release -r win-x64 --self-contained false -p:DebugType=None -p:DebugSymbols=false -o publish
 ```
 
-Builds normally use standard `bin` and `obj` folders. Optionally pass `-p:OrbitBuildRoot=<absolute-scratch-directory>` to keep all intermediate and compiled files outside the source folder.
+`Orbit.Tests` contains xUnit regressions, fixtures and the WebView harness; none ship in the executable. Native UI checks are opt-in with `ORBIT_UI_TESTS=1`. Public search integration checks use `ORBIT_SEARCH_TEST=1`. Live launch tests additionally require `ORBIT_LIVE_TEST=1`, `ORBIT_LIVE_ACCOUNTS` with two comma-separated account names, and `ORBIT_LIVE_PLACE` with the authorized target. They use only those selected local sessions, verify both clients, and close only their verified test processes. Live credentials are never used in CI. Screenshots and test results stay in ignored test output directories, outside the source tree.
 
-The executable also supports `--self-test --output <absolute-json-path>` for offline storage/authentication tests. `--smoke --output <directory>` opens an isolated sample workspace, exercises the actual WebView bridge/UI, captures a screenshot, writes its JSON results, and exits. Add `--narrow` for the smaller layout, or `--smoke-empty` for empty-state checks. These modes never load the real Orbit vault or use Roblox credentials.
+GitHub Actions runs the offline xUnit suite and a Windows release publish. The application version is read from its assembly. Optional `OrbitBuildRoot` redirects build output under a separate directory per project.
 
-## Implementation references
+## Architecture and limits
 
-The native bridge uses an exact local origin and a fixed command set, validates message size, prevents dashboard navigation, and never exposes a general host object. Roblox windows have no native message bridge. See Microsoft's [WebView2 security guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security).
+`AppService` dispatches commands and owns application state. `LaunchService` manages launch queues and bounded retries; `ProcessTracker` verifies process ownership; `AccountTools` wraps account operations; `ActivityStore` debounces persistence; `ScheduledBackups` manages opt-in exports. `ControlServer` marshals work through the UI dispatcher. Roblox browser windows have no native message bridge; the dashboard bridge admits only its exact local origin.
 
-Dependencies: [Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4191.47), [System.Security.Cryptography.ProtectedData](https://www.nuget.org/packages/System.Security.Cryptography.ProtectedData/8.0.0), and [libsodium](https://www.nuget.org/packages/libsodium/1.0.22), with their respective licenses. Roblox API reference: [Creator Hub account APIs](https://create.roblox.com/docs/cloud/reference/features/accounts). This is an independent local application, unaffiliated with Roblox.
+A live two-client launch/process observation passed in place 189707 after the safety changes. This verifies concurrent client survival, not every game mode or a permanent guarantee of Roblox compatibility. See `verification/NOTES.md` for evidence and scope. Account mutation tools, private/follow launches and every historical manager feature have not all been live-tested. Avatar editing, bulk password login, updater, legacy UWP paths, client-settings/FPS patching and full Nexus UI parity remain outside this release.
+
+Dependencies: [WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4191.47), [ProtectedData](https://www.nuget.org/packages/System.Security.Cryptography.ProtectedData/8.0.0), [libsodium](https://www.nuget.org/packages/libsodium/1.0.22). References: [WebView2 security guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security), [Roblox public search endpoint announcement](https://devforum.roblox.com/t/official-list-of-deprecated-web-endpoints/62889/59).
