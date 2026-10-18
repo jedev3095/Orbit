@@ -1,4 +1,10 @@
-# Current verification (0.2.0)
+# Current verification (0.2.1)
+
+Fixed the Places search input being restored to its previous submitted query during background state refreshes. The input now maintains a separate draft on each input event. Search completion updates result state without replacing newer typing, and redraws preserve the full selection range.
+
+Native WebView regressions reproduce clearing the field, replacing the query across a native state push, validation of a short draft, and typing while a search response is pending. All 42 UI checks passed at normal and narrow widths. The full local run passed 22 xUnit cases; live account launch and public API integration tests were skipped because this change only affects input state. Their prior results below remain scoped to 0.2.0.
+
+# Verification (0.2.0)
 
 18 October 2026, Windows x64, .NET 8, installed WebView2 runtime.
 

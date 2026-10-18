@@ -5,7 +5,7 @@ const icon = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const pending = new Map(); let sequence = 0;
 let state = {accounts:[],games:[],settings:{},activity:[]}, page = 'accounts', group = '', query = '', sort = 'name', selected = new Set();
 let launch = {placeId:'', userId:'', jobId:'', mode:'game'}, busy = false;
-let placeBrowser={query:'',games:[],next:'',session:'',searched:false,loading:false,error:''};
+let placeBrowser={draft:'',query:'',games:[],next:'',session:'',searched:false,loading:false,error:''};
 const bridge = window.chrome?.webview;
 function call(action,payload={}) {
   if (!bridge) return Promise.reject(Error('Open Orbit.exe to use this desktop interface.'));
@@ -33,7 +33,7 @@ function status(a){const s=a.status||'Unchecked',c=['In game','In Studio'].inclu
 function ago(value){if(!value)return'Never';const n=Math.max(0,(Date.now()-new Date(value).getTime())/60000);return n<1?'Just now':n<60?Math.floor(n)+'m ago':n<1440?Math.floor(n/60)+'h ago':Math.floor(n/1440)+'d ago';}
 function visible(){return state.accounts.filter(a=>(!group||a.group===group)&&[a.username,a.displayName,a.alias,a.group].some(v=>String(v).toLowerCase().includes(query.toLowerCase()))).sort((a,b)=>sort==='recent'?new Date(b.lastUse||0)-new Date(a.lastUse||0):sort==='balance'?(b.robux||0)-(a.robux||0):a.username.localeCompare(b.username));}
 function render(){
-  const focus=document.activeElement?.id, start=document.activeElement?.selectionStart;
+  const focus=document.activeElement?.id, start=document.activeElement?.selectionStart, end=document.activeElement?.selectionEnd;
   const navs=[['accounts','Accounts'],['games','Places'],['control','Account control'],['activity','Activity'],['settings','Settings']];
   $('#nav').innerHTML=navs.map(([id,title])=>`<button class="nav-item ${page===id?'active':''}" data-page="${id}" aria-pressed="${page===id}">${title}</button>`).join('');
   $('#preview-badge').hidden=!state.demo;
@@ -42,7 +42,7 @@ function render(){
   document.body.classList.toggle('violet',state.settings.accent==='violet');
   $('#main').classList.toggle('accounts-view',page==='accounts');
   $('#main').innerHTML=({accounts:accountsPage,games:gamesPage,control:controlPage,activity:activityPage,settings:settingsPage}[page]||accountsPage)();
-  if(focus){const input=document.getElementById(focus);if(input){input.focus();if(typeof start==='number'&&input.setSelectionRange&&input.type!=='number')input.setSelectionRange(start,start);}}
+  if(focus){const input=document.getElementById(focus);if(input){input.focus();if(typeof start==='number'&&input.setSelectionRange&&input.type!=='number')input.setSelectionRange(start,end??start);}}
 }
 function accountsPage(){
   const rows=visible(), groups=[...new Set(state.accounts.map(a=>a.group))].sort();
@@ -70,9 +70,11 @@ function launchFields(){return `<label class="field"><span>${launch.mode==='foll
 function empty(ico,title,sub,action=''){return `<div class="empty">${icon(ico)}<h3>${title}</h3><p>${sub}</p>${action}</div>`;}
 function gameArt(g,i=0){const url=image(g.image);return `<span class="game-art c${i%3}">${url?`<img src="${url}" alt="">`:icon('game')}</span>`;}
 function placeCard(g,i,browsing){return `<article class="panel game-card">${gameArt(g,i)}<h3>${esc(g.name)}</h3><p>By ${esc(g.creator||'Roblox creator')}${browsing?' · '+Number(g.players||0).toLocaleString()+' playing':''}</p><div class="row">${button('Use place','pickGame','play','primary small',`data-place="${g.placeId}"`)}${browsing?button(state.games.some(saved=>saved.placeId===g.placeId)?'Saved':'Save','savePlace','plus','small',`data-place="${g.placeId}" ${state.games.some(saved=>saved.placeId===g.placeId)?'disabled':''}`):button('Servers','servers','globe','small',`data-place="${g.placeId}"`)}${!browsing?`<button class="icon-btn" data-action="favorite" data-place="${g.placeId}" title="Favorite">${g.favorite?'★':'☆'}</button><button class="icon-btn" data-action="removeGame" data-place="${g.placeId}" title="Remove experience">${icon('close')}</button>`:''}</div></article>`;}
-function gamesPage(){return heading('Places','Find an experience by name, then choose it for your accounts.',button('Add by ID','addGame','plus','ghost'))+`<section class="panel place-browser"><h2>Browse Roblox</h2><div class="place-search-row"><label class="search">${icon('search')}<input id="place-query" aria-label="Search Roblox places" placeholder="Search experiences, e.g. Natural Disaster Survival" maxlength="100" value="${esc(placeBrowser.query)}"></label>${button(placeBrowser.loading?'Searching…':'Search','searchPlaces','search','primary',placeBrowser.loading?'disabled':'')}</div>${placeBrowser.error?`<p class="error-detail" role="alert">${esc(placeBrowser.error)}</p>`:''}${placeBrowser.loading?'<p class="control-help" role="status">Searching Roblox…</p>':placeBrowser.searched&&!placeBrowser.games.length?'<p class="control-help">No places found. Try a different name.</p>':!placeBrowser.searched?'<p class="control-help">Search by name. Orbit fills in the place ID for you.</p>':''}</section>${placeBrowser.games.length?`<div class="game-grid search-results">${placeBrowser.games.map((g,i)=>placeCard(g,i,true)).join('')}</div>${placeBrowser.next?`<div class="modal-actions">${button('More results','morePlaces','','ghost',placeBrowser.loading?'disabled':'')}</div>`:''}`:''}<h2 class="library-heading">Your saved places</h2>${state.games.length?`<div class="game-grid">${state.games.map((g,i)=>placeCard(g,i,false)).join('')}</div>`:`<section class="panel">${empty('game','No saved places yet','Search above and save an experience for next time.')}</section>`}`;}
+function gamesPage(){return heading('Places','Find an experience by name, then choose it for your accounts.',button('Add by ID','addGame','plus','ghost'))+`<section class="panel place-browser"><h2>Browse Roblox</h2><div class="place-search-row"><label class="search">${icon('search')}<input id="place-query" aria-label="Search Roblox places" placeholder="Search experiences, e.g. Natural Disaster Survival" maxlength="100" value="${esc(placeBrowser.draft)}"></label>${button(placeBrowser.loading?'Searching…':'Search','searchPlaces','search','primary',placeBrowser.loading?'disabled':'')}</div>${placeBrowser.error?`<p class="error-detail" role="alert">${esc(placeBrowser.error)}</p>`:''}${placeBrowser.loading?'<p class="control-help" role="status">Searching Roblox…</p>':placeBrowser.searched&&!placeBrowser.games.length?'<p class="control-help">No places found. Try a different name.</p>':!placeBrowser.searched?'<p class="control-help">Search by name. Orbit fills in the place ID for you.</p>':''}</section>${placeBrowser.games.length?`<div class="game-grid search-results">${placeBrowser.games.map((g,i)=>placeCard(g,i,true)).join('')}</div>${placeBrowser.next?`<div class="modal-actions">${button('More results','morePlaces','','ghost',placeBrowser.loading?'disabled':'')}</div>`:''}`:''}<h2 class="library-heading">Your saved places</h2>${state.games.length?`<div class="game-grid">${state.games.map((g,i)=>placeCard(g,i,false)).join('')}</div>`:`<section class="panel">${empty('game','No saved places yet','Search above and save an experience for next time.')}</section>`}`;}
 async function searchPlaces(more=false){
-  const query=more?placeBrowser.query:($('#place-query')?.value||'').trim();
+  const draft=$('#place-query')?.value??placeBrowser.draft;
+  if(!more)placeBrowser.draft=draft;
+  const query=more?placeBrowser.query:draft.trim();
   if(query.length<2){placeBrowser.error='Enter at least two characters to search.';render();return;}
   placeBrowser.query=query;placeBrowser.error='';placeBrowser.loading=true;if(!more){placeBrowser.games=[];placeBrowser.next='';placeBrowser.session='';}render();
   try{const result=await call('searchPlaces',{query,cursor:more?placeBrowser.next:'',session:placeBrowser.session});const merged=more?[...placeBrowser.games,...result.games]:result.games;placeBrowser.games=[...new Map(merged.map(g=>[g.placeId,g])).values()];placeBrowser.next=result.nextPageToken;placeBrowser.session=result.sessionId;placeBrowser.searched=true;}
@@ -160,6 +162,7 @@ document.addEventListener('click',event=>{
   if(simple.includes(action))execute();else run(execute);
 });
 document.addEventListener('input',e=>{
+  if(e.target.id==='place-query')placeBrowser.draft=e.target.value;
   if(e.target.id==='search'){query=e.target.value;render();}
   if(e.target.id==='launch-place'){if(launch.mode==='follow')launch.userId=e.target.value;else launch.placeId=e.target.value;}
   if(e.target.id==='launch-job')launch.jobId=e.target.value;
