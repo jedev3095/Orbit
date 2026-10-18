@@ -1,0 +1,7 @@
+Tool: built-in image_gen
+Use: Orbit Windows application icon
+Original: orbit-icon.png (1254 x 1254, transparent outside the tile)
+Windows format: orbit.ico (16, 24, 32, 48, 64, 128, 256 pixels)
+
+Final prompt:
+Use case: logo-brand. Create one finished Windows desktop app icon for Orbit, a Roblox account manager with a charcoal dashboard and muted ice-blue accents. Asset type: square application icon, a single centered symbol, not a mockup or presentation sheet. Design: a bold ice-blue orbital ring forming an abstract O, tilted in perspective, with one small bright satellite dot, inside a charcoal rounded-square tile. Geometric, clean, elegant, restrained modern desktop software aesthetic, subtle material depth and soft edge highlights, no busy texture. Palette: charcoal #181a1d and cool blue #91b6ee with pale blue highlights. Strong silhouette, thick simple strokes readable at 24px, generous clean margins. Front-on square composition. Transparent outside the rounded-square tile, true alpha. No text, letters, wordmark, Roblox logo, watermarks, extra icons, background scenery or cast shadow outside tile.

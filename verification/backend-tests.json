@@ -1,0 +1,293 @@
+{
+  "passed": true,
+  "tests": [
+    {
+      "name": "Exact dashboard origin admitted",
+      "passed": true
+    },
+    {
+      "name": "Host bridge rejects https://orbit.local.attacker.test/index.html",
+      "passed": true
+    },
+    {
+      "name": "Host bridge rejects http://orbit.local/index.html",
+      "passed": true
+    },
+    {
+      "name": "Host bridge rejects https://orbit.local:444/index.html",
+      "passed": true
+    },
+    {
+      "name": "Host bridge rejects https://orbit.local/other.html",
+      "passed": true
+    },
+    {
+      "name": "Host bridge rejects https://attacker.test/index.html",
+      "passed": true
+    },
+    {
+      "name": "Multi-instance holds both singleton names",
+      "passed": true
+    },
+    {
+      "name": "Singleton Event cannot be created while the guard is active",
+      "passed": true
+    },
+    {
+      "name": "A second manager cannot silently claim readiness",
+      "passed": true
+    },
+    {
+      "name": "Guard can be disabled from another thread",
+      "passed": true
+    },
+    {
+      "name": "Both singleton mutexes are released without abandonment",
+      "passed": true
+    },
+    {
+      "name": "Multi-instance can be re-enabled after disposal",
+      "passed": true
+    },
+    {
+      "name": "An existing Roblox-style Event blocks activation",
+      "passed": true
+    },
+    {
+      "name": "Failed activation releases partially acquired singleton",
+      "passed": true
+    },
+    {
+      "name": "Cookie header normalized",
+      "passed": true
+    },
+    {
+      "name": "Bitwarden public-key identity matches browser extension ID",
+      "passed": true
+    },
+    {
+      "name": "Bitwarden discovery finds code under a browser extension folder",
+      "passed": true
+    },
+    {
+      "name": "Extension code copied to Orbit-owned package",
+      "passed": true
+    },
+    {
+      "name": "Reserved browser metadata is not copied",
+      "passed": true
+    },
+    {
+      "name": "Original extension package remains unchanged",
+      "passed": true
+    },
+    {
+      "name": "Bitwarden popup origin accepted",
+      "passed": true
+    },
+    {
+      "name": "Foreign extension origin rejected",
+      "passed": true
+    },
+    {
+      "name": "Extension popup traversal rejected",
+      "passed": true
+    },
+    {
+      "name": "Remote popup URL rejected",
+      "passed": true
+    },
+    {
+      "name": "Cookie header injection rejected",
+      "passed": true
+    },
+    {
+      "name": "First merge adds account",
+      "passed": true
+    },
+    {
+      "name": "Vault stores encrypted content",
+      "passed": true
+    },
+    {
+      "name": "DPAPI vault round trip",
+      "passed": true
+    },
+    {
+      "name": "Duplicate import updates without duplication",
+      "passed": true
+    },
+    {
+      "name": "Vault replacement keeps backup",
+      "passed": true
+    },
+    {
+      "name": "Invalid mixed import rejected",
+      "passed": true
+    },
+    {
+      "name": "Invalid import does not partly merge",
+      "passed": true
+    },
+    {
+      "name": "Backup round trip",
+      "passed": true
+    },
+    {
+      "name": "Wrong backup password rejected",
+      "passed": true
+    },
+    {
+      "name": "Tampered backup rejected",
+      "passed": true
+    },
+    {
+      "name": "Short backup password rejected",
+      "passed": true
+    },
+    {
+      "name": "Original JSON import",
+      "passed": true
+    },
+    {
+      "name": "Legacy entropy length matches binary",
+      "passed": true
+    },
+    {
+      "name": "Original machine DPAPI import",
+      "passed": true
+    },
+    {
+      "name": "Truncated legacy vault rejected",
+      "passed": true
+    },
+    {
+      "name": "Original password-encrypted format import",
+      "passed": true
+    },
+    {
+      "name": "Wrong original password rejected",
+      "passed": true
+    },
+    {
+      "name": "Expired session returns failed launch result",
+      "passed": true
+    },
+    {
+      "name": "Expired session shows Needs login",
+      "passed": true
+    },
+    {
+      "name": "Expired session is rejected before ticket or client launch",
+      "passed": true
+    },
+    {
+      "name": "Launch error never contains saved credentials",
+      "passed": true
+    },
+    {
+      "name": "Activity persists actionable error",
+      "passed": true
+    },
+    {
+      "name": "Activity restored on restart",
+      "passed": true
+    },
+    {
+      "name": "Blocked multi-instance fails before authentication or launching",
+      "passed": true
+    },
+    {
+      "name": "Blocked multi-instance gives actionable restart guidance",
+      "passed": true
+    },
+    {
+      "name": "Fresh import clears previous sign-in error",
+      "passed": true
+    },
+    {
+      "name": "Diagnostic redaction removes cookie and ticket",
+      "passed": true
+    },
+    {
+      "name": "Valid session receives ticket after CSRF retry",
+      "passed": true
+    },
+    {
+      "name": "Initial launch-ticket request sends JSON content type and empty object",
+      "passed": true
+    },
+    {
+      "name": "CSRF retry retains launch-ticket JSON body and content type",
+      "passed": true
+    },
+    {
+      "name": "Quick Login requires a created attempt before polling",
+      "passed": true
+    },
+    {
+      "name": "Quick Login creates a code after CSRF retry",
+      "passed": true
+    },
+    {
+      "name": "Quick Login uses server expiration",
+      "passed": true
+    },
+    {
+      "name": "Quick Login polling uses only the attempt\u0027s code and key",
+      "passed": true
+    },
+    {
+      "name": "Approved Quick Login extracts session cookie",
+      "passed": true
+    },
+    {
+      "name": "Every Quick Login POST sends JSON",
+      "passed": true
+    },
+    {
+      "name": "Unapproved Quick Login cannot redeem",
+      "passed": true
+    },
+    {
+      "name": "Abandoned Quick Login is cancelled",
+      "passed": true
+    },
+    {
+      "name": "Dashboard state excludes credentials",
+      "passed": true
+    },
+    {
+      "name": "API exact token accepted",
+      "passed": true
+    },
+    {
+      "name": "API mismatching token rejected",
+      "passed": true
+    },
+    {
+      "name": "API missing token rejected",
+      "passed": true
+    },
+    {
+      "name": "API empty configured token rejected",
+      "passed": true
+    },
+    {
+      "name": "HTTP listener rejects anonymous",
+      "passed": true
+    },
+    {
+      "name": "HTTP state authenticated and sanitized",
+      "passed": true
+    },
+    {
+      "name": "HTTP rejects browser origins",
+      "passed": true
+    },
+    {
+      "name": "Authenticated Nexus ping round trip",
+      "passed": true
+    }
+  ]
+}

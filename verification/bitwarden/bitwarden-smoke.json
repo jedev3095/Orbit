@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "installed": [
+    {
+      "id": "dgiklkfkllikcanfonkcabmbdfmgleag",
+      "name": "Microsoft Clipboard Extension",
+      "isEnabled": true
+    },
+    {
+      "id": "mhjfbmdgcfjbbpaeojofohoefgiehjai",
+      "name": "Microsoft Edge PDF Viewer",
+      "isEnabled": true
+    },
+    {
+      "id": "nngceckbapebfimnlniiiahkandclblb",
+      "name": "Bitwarden Password Manager",
+      "isEnabled": true
+    }
+  ],
+  "version": "2026.10.0",
+  "probe": {
+    "buttons": [
+      "Continue",
+      " Log in with passkey",
+      " Use single sign-on",
+      " Log in ",
+      "bitwarden.com"
+    ],
+    "email": true,
+    "text": "Log in\nEmail address\n*\n(required)\nRemember email\nContinue\nor\n Log in with passkey\n Use single sign-on\nNew to Bitwarden? \nCreate account\nAccessing: \nbitwarden.com",
+    "title": "Bitwarden"
+  },
+  "profileIsolated": true,
+  "nativeBridgeDisabled": true
+}

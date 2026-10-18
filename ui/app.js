@@ -1,0 +1,185 @@
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const icon = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const pending = new Map(); let sequence = 0;
+let state = {accounts:[],games:[],settings:{},activity:[]}, page = 'accounts', group = '', query = '', sort = 'name', selected = new Set();
+let launch = {placeId:'', jobId:'', mode:'game'}, busy = false;
+const bridge = window.chrome?.webview;
+function call(action,payload={}) {
+  if (!bridge) return Promise.reject(Error('Open Orbit.exe to use this desktop interface.'));
+  const id=String(++sequence);
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{pending.delete(id);reject(Error('The operation timed out. Check Activity before retrying.'));},900000);
+    pending.set(id,{resolve,reject,timer});bridge.postMessage({id,action,payload});
+  });
+}
+bridge?.addEventListener('message',event=>{
+  const m=event.data;
+  if(m.type==='state'){state=m.data;selected=new Set([...selected].filter(id=>state.accounts.some(a=>a.id===id)));render();}
+  if(m.type==='result'){const p=pending.get(m.id);if(!p)return;clearTimeout(p.timer);pending.delete(m.id);m.ok?p.resolve(m.data):p.reject(Error(m.error));}
+});
+function toast(text,error=false){const node=document.createElement('div');node.className='toast'+(error?' error':'');node.textContent=text;$('#toasts').append(node);setTimeout(()=>node.remove(),6500);}
+function updateHeaderStatus(){const active=!!state.launching||busy;$('#header-status').textContent=state.launching?'Launching':busy?'Working':'Idle';$('#header-status').classList.toggle('working',active);}
+async function run(work){if(busy)return;busy=true;updateHeaderStatus();$('#footer-status').textContent='Working…';try{await work();}catch(e){toast(e.message,true);}finally{busy=false;updateHeaderStatus();$('#footer-status').textContent='Ready';}}
+function button(label,action,ico='',cls='',extra=''){return `<button class="button ${cls}" data-action="${action}" ${extra}>${ico?icon(ico):''}${label}</button>`;}
+function heading(title,sub,actions='',eyebrow='YOUR WORKSPACE'){return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${sub}</p></div><div class="heading-actions">${actions}</div></div>`;}
+function image(url){try{const u=new URL(url);return u.protocol==='https:'&&/^[^.]+\.rbxcdn\.com$/.test(u.hostname)?esc(url):'';}catch{return '';}}
+function avatar(a,i=0){const url=image(a.thumbnail);return `<span class="avatar c${i%4}">${url?`<img src="${url}" alt="">`:esc((a.displayName||a.username).slice(0,2).toUpperCase())}</span>`;}
+function name(a){return state.settings.hideUsernames?'Account '+String(a.userId).slice(-4):a.displayName||a.username;}
+function handle(a){return state.settings.hideUsernames?'Username hidden':'@'+a.username;}
+function status(a){const s=a.status||'Unchecked',c=['In game','In Studio'].includes(s)?'ingame':['Online','Running','Launching'].includes(s)?'online':/failed|login/i.test(s)?'error':'';return a.lastError?`<button class="status status-button ${c}" data-action="showError" data-id="${a.id}" title="${esc(a.lastError)}" aria-label="${esc(s)}: show error details"><i></i>${esc(s)}</button>`:`<span class="status ${c}"><i></i>${esc(s)}</span>`;}
+function ago(value){if(!value)return'Never';const n=Math.max(0,(Date.now()-new Date(value).getTime())/60000);return n<1?'Just now':n<60?Math.floor(n)+'m ago':n<1440?Math.floor(n/60)+'h ago':Math.floor(n/1440)+'d ago';}
+function visible(){return state.accounts.filter(a=>(!group||a.group===group)&&[a.username,a.displayName,a.alias,a.group].some(v=>String(v).toLowerCase().includes(query.toLowerCase()))).sort((a,b)=>sort==='recent'?new Date(b.lastUse||0)-new Date(a.lastUse||0):sort==='balance'?(b.robux||0)-(a.robux||0):a.username.localeCompare(b.username));}
+function render(){
+  const focus=document.activeElement?.id, start=document.activeElement?.selectionStart;
+  const navs=[['accounts','Accounts'],['games','Games'],['control','Account control'],['activity','Activity'],['settings','Settings']];
+  $('#nav').innerHTML=navs.map(([id,title])=>`<button class="nav-item ${page===id?'active':''}" data-page="${id}" aria-pressed="${page===id}">${title}</button>`).join('');
+  $('#preview-badge').hidden=!state.demo;
+  $('#header-status').textContent=state.launching?'Launching':busy?'Working':'Idle';
+  $('#header-status').classList.toggle('working',!!state.launching||busy);
+  document.body.classList.toggle('violet',state.settings.accent==='violet');
+  $('#main').classList.toggle('accounts-view',page==='accounts');
+  $('#main').innerHTML=({accounts:accountsPage,games:gamesPage,control:controlPage,activity:activityPage,settings:settingsPage}[page]||accountsPage)();
+  if(focus){const input=document.getElementById(focus);if(input){input.focus();if(typeof start==='number'&&input.setSelectionRange&&input.type!=='number')input.setSelectionRange(start,start);}}
+}
+function accountsPage(){
+  const rows=visible(), groups=[...new Set(state.accounts.map(a=>a.group))].sort();
+  const online=state.accounts.filter(a=>['Online','In game','In Studio','Running','Launching'].includes(a.status)).length;
+  return `<div class="accounts-layout"><aside class="account-controls" aria-label="Account and launch controls">
+    <div class="action-grid">${button('Add account','add','plus')}${button('Import','import','download')}${button('Refresh','refresh','refresh')}${button('Export','export','download')}</div>
+    <div class="section-title">Launch</div>${launchFields()}
+    <button class="button primary launch-button" data-action="launch">${icon('play')}Launch${selected.size?' ('+selected.size+')':''}</button>
+    ${state.launching?button('Cancel queued launches','cancelLaunch','stop','cancel-launch'):''}
+    <p class="launch-note">${selected.size?selected.size+' account'+(selected.size===1?'':'s')+' selected':'Select accounts in the table.'} · ${state.settings.launchDelay||8}s delay</p>
+    <div class="section-separator"><div class="section-title">Groups<button class="icon-btn" data-action="newGroup" title="Create a group">+</button></div>
+    <div class="groups-list"><button class="group-btn ${!group?'active':''}" data-group=""><span class="group-dot"></span>All accounts<span>${state.accounts.length}</span></button>${groups.map(g=>`<button class="group-btn ${group===g?'active':''}" data-group="${esc(g)}"><span class="group-dot"></span>${esc(g)}<span>${state.accounts.filter(a=>a.group===g).length}</span></button>`).join('')}</div>
+    <div class="workspace-stats"><span><b>${state.accounts.length}</b>accounts</span><span><b>${online}</b>online</span></div></div>
+    ${state.games.length?`<div class="section-separator"><div class="section-title">Recent places</div>${state.games.slice(0,3).map(g=>`<button class="recent-link" data-action="pickGame" data-place="${g.placeId}"><span>${esc(g.name)}</span>${icon('arrow')}</button>`).join('')}</div>`:''}
+    <p class="vault-caption">${icon('shield')}Encrypted on this Windows account</p>
+  </aside><section class="accounts-panel" aria-label="Accounts">
+    <div class="events-head"><h2>${group?esc(group):'Accounts'}</h2><div class="heading-actions">${button('Open browser','browserSelected','globe','small',selected.size===1?'':'disabled')}${button('Edit selected','editSelected','','small')}</div></div>
+    <div class="table-tools"><label class="search">${icon('search')}<input id="search" placeholder="Search accounts" aria-label="Search accounts" value="${esc(query)}"></label><select id="sort" class="sort" aria-label="Sort accounts"><option value="name" ${sort==='name'?'selected':''}>Name ↑</option><option value="recent" ${sort==='recent'?'selected':''}>Recently used</option><option value="balance" ${sort==='balance'?'selected':''}>Robux ↓</option></select></div>
+    <div class="table-wrap"><table class="account-table" aria-label="Account list"><colgroup><col class="check-column"><col class="name-column"><col class="status-column"><col class="group-column"><col class="balance-column"><col class="last-used-column"><col class="menu-column"></colgroup><thead><tr><th><input type="checkbox" id="select-all" aria-label="Select all visible accounts" ${rows.length&&rows.every(a=>selected.has(a.id))?'checked':''}></th><th>Account</th><th>Status</th><th>Group</th><th>Robux</th><th class="last-used-column">Last used</th><th></th></tr></thead><tbody>
+    ${rows.map((a,i)=>`<tr class="${selected.has(a.id)?'selected':''}"><td><input type="checkbox" data-select="${a.id}" aria-label="Select ${esc(name(a))}" ${selected.has(a.id)?'checked':''}></td><td><div class="identity">${avatar(a,i)}<div><button class="identity-name" data-action="edit" data-id="${a.id}">${esc(name(a))}${a.alias?`<span class="alias-tag">${esc(a.alias)}</span>`:''}</button><span class="identity-sub">${esc(handle(a))}</span></div></div></td><td>${status(a)}</td><td><span class="group-tag">${esc(a.group)}</span></td><td class="balance">${a.robux===null||a.robux===undefined?'—':a.robux.toLocaleString()}</td><td class="last-used last-used-column">${ago(a.lastUse)}</td><td><button class="icon-btn" title="Edit account" data-action="edit" data-id="${a.id}">···</button></td></tr>`).join('')||`<tr class="empty-row"><td colspan="7">${empty('users',state.accounts.length?'No matching accounts':'No accounts added',state.accounts.length?'Try another search or group.':'Add an account or import an existing account file.',state.accounts.length?button('Clear filters','clearFilters'):button('Add account','add','plus'))}</td></tr>`}
+    </tbody></table></div><div class="table-bottom"><span>${selected.size?selected.size+' selected':rows.length+' account'+(rows.length===1?'':'s')}</span><div class="selection-actions">${selected.size?button('Stop selected','stop','stop','small')+button('Remove','remove','','small'):''}</div></div>
+  </section></div>`;
+}
+function launchFields(){return `<label class="field"><span>${launch.mode==='follow'?'User ID to follow':'Place ID'}</span><input id="launch-place" inputmode="numeric" placeholder="e.g. 4924922222" value="${esc(launch.placeId)}"></label><label class="field"><span>${launch.mode==='private'?'Private server link code':'Server / job ID'} <small class="optional">${launch.mode==='private'?'required':'optional'}</small></span><input id="launch-job" placeholder="${launch.mode==='private'?'Paste the link code':'Find a specific server'}" value="${esc(launch.jobId)}"></label><label class="field"><span>Launch mode</span><select id="launch-mode"><option value="game" ${launch.mode==='game'?'selected':''}>Public experience</option><option value="private" ${launch.mode==='private'?'selected':''}>Private server</option><option value="follow" ${launch.mode==='follow'?'selected':''}>Follow a user</option></select></label>`;}
+function empty(ico,title,sub,action=''){return `<div class="empty">${icon(ico)}<h3>${title}</h3><p>${sub}</p>${action}</div>`;}
+function gameArt(g,i=0){const url=image(g.image);return `<span class="game-art c${i%3}">${url?`<img src="${url}" alt="">`:icon('game')}</span>`;}
+function gamesPage(){return heading('Game library','Saved experiences and public servers.',button('Add experience','addGame','plus','primary'))+(state.games.length?`<div class="game-grid">${state.games.map((g,i)=>`<article class="panel game-card">${gameArt(g,i)}<h3>${esc(g.name)}</h3><p>By ${esc(g.creator||'Roblox creator')} · ${g.placeId}</p><div class="row">${button('Launch','pickGame','play','primary small',`data-place="${g.placeId}"`)}${button('Servers','servers','globe','small',`data-place="${g.placeId}"`)}<button class="icon-btn" data-action="favorite" data-place="${g.placeId}" title="${g.favorite?'Unfavorite':'Favorite'}">${g.favorite?'★':'☆'}</button><button class="icon-btn" data-action="removeGame" data-place="${g.placeId}" title="Remove experience">${icon('close')}</button></div></article>`).join('')}</div>`:`<section class="panel">${empty('game','Build your game library','Add an experience by its Roblox place ID.',button('Add experience','addGame','plus','primary'))}</section>`);}
+function controlPage(){return heading('Account control','Keep connected clients and running sessions in view.',button('Local control settings','goSettings','settings','ghost'))+`<div class="columns"><section class="panel"><div class="panel-heading"><div class="panel-title">Sessions <span class="count">${state.accounts.length}</span></div><span class="label">NEXUS + DESKTOP</span></div>${state.accounts.map((a,i)=>`<div class="control-row"><input type="checkbox" data-select="${a.id}" aria-label="Select ${esc(name(a))}" ${selected.has(a.id)?'checked':''}>${avatar(a,i)}<div><strong class="identity-name">${esc(name(a))}</strong><span class="identity-sub">${a.connected?'Nexus connected':a.running?'Tracked Roblox process':'No connected session'}</span></div><span class="status ${a.connected||a.running?'online':''}"><i></i>${a.connected?'Connected':a.running?'Running':'Offline'}</span><button class="icon-btn" data-action="edit" data-id="${a.id}" title="Edit relaunch settings">${icon('sliders')}</button></div>`).join('')||empty('sliders','No sessions yet','Add accounts to manage their sessions.')}</section><div><section class="panel settings-panel"><h2>Send a Nexus command</h2><p class="intro">Send text to selected, authenticated Nexus clients. Orbit does not install a client into Roblox.</p><label class="field"><span>Command</span><textarea id="nexus-message" placeholder="Enter a command for your connected clients"></textarea></label>${button('Send to selected','nexusSend','arrow','primary')} ${button('Stop selected','stop','stop','ghost')}<p class="control-help">${selected.size} selected · ${state.apiRunning?'Local controls are running':'Local controls are off'}</p></section><section class="panel settings-panel"><h2>Relaunch & window positions</h2><p class="control-help">Open an account’s options to set its place ID, server, and auto-relaunch delay. Orbit can restore saved window positions for processes it can verify belong to that account.</p></section></div></div>`;}
+function activityPage(){return heading('Activity','Account actions from the current session.','', 'WORKSPACE HISTORY')+`<section class="panel">${state.activity.map(a=>`<div class="activity-row ${esc(a.kind)}"><time>${new Date(a.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</time><i class="tiny-dot"></i><p>${esc(a.message)}</p></div>`).join('')||empty('wave','A quiet workspace','Account actions will appear here as you use Orbit.')}</section>`;}
+function toggle(id,title,description,checked){return `<label class="switch-row"><span><strong>${title}</strong><small>${description}</small></span><input type="checkbox" id="${id}" ${checked?'checked':''}></label>`;}
+function settingsPage(){const s=state.settings;return heading('Settings','Configure account sessions, appearance, and local controls.',button('Save changes','saveSettings','','primary'))+`<div class="columns"><div><section class="panel settings-panel"><h2>Session preferences</h2><p class="intro">Control how Orbit launches and organizes your accounts.</p>${toggle('multiInstance','Multiple Roblox instances','Close all Roblox clients before enabling, then keep Orbit open.',s.multiInstance)}<p class="control-help" id="multi-status">${s.multiInstance ? (state.multiInstanceReady ? 'Multi-instance ready. Keep Orbit open while playing.' : esc(state.multiInstanceError || 'Not ready. Save changes to enable it before opening Roblox.')) : 'Multi-instance is off.'}</p>${toggle('closePrevious','Close previous session','Close an account’s verified process before launching it again.',s.closePrevious)}${toggle('rememberWindows','Remember window positions','Restore the size and position of tracked Roblox windows.',s.rememberWindows)}<label class="field"><span>Seconds between account launches</span><input id="launchDelay" type="number" min="1" max="60" value="${s.launchDelay||8}"></label></section><section class="panel settings-panel"><h2>Appearance & privacy</h2>${toggle('hideUsernames','Hide usernames','Show account identifiers instead of names in the dashboard.',s.hideUsernames)}<label class="field"><span>Accent color</span><select id="accent"><option value="blue" ${s.accent!=='violet'?'selected':''}>Relay blue</option><option value="violet" ${s.accent==='violet'?'selected':''}>Soft violet</option></select></label></section></div><div><section class="panel settings-panel"><h2>Local controls</h2><p class="intro">An authenticated API and Nexus WebSocket listener, available only on this PC. Every request requires the access token.</p>${toggle('apiEnabled','Enable local control server','Loopback only. No remote network binding.',s.apiEnabled)}<label class="field"><span>Port</span><input id="apiPort" type="number" min="1024" max="65535" value="${s.apiPort||7963}"></label><div class="settings-actions">${button('Copy access token','copyApiToken','shield','ghost')}</div><p class="control-help">${state.apiRunning?'Listening':'Configured'} at <code>127.0.0.1:${s.apiPort||7963}</code><br>See the included guide for API and Nexus integration.</p></section><section class="panel settings-panel"><h2>Your account vault</h2><p class="intro">Stored using Windows account encryption. Create a password-protected backup to move accounts to another PC.</p><div class="settings-actions">${button('Export backup','export','download','ghost')}${button('Import','import','plus','ghost')}</div><p class="control-help">Version ${esc(state.version)} · Windows + WebView2</p></section></div></div>`;}
+function modal(title,body){$('#modal-content').innerHTML=`<div class="modal-head"><h2>${title}</h2><button class="icon-btn" data-action="closeModal" aria-label="Close dialog">${icon('close')}</button></div><div class="modal-body">${body}<div id="modal-error" class="error-box" role="alert"></div></div>`;if(!$('#modal').open)$('#modal').showModal();}
+function field(label,id,value='',type='text',placeholder=''){return `<label class="field"><span>${label}</span><input id="${id}" type="${type}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off"></label>`;}
+function actions(label,action,cls='primary'){return `<div class="modal-actions">${button('Cancel','closeModal','','ghost')}${button(label,action,'',cls)}</div>`;}
+function addModal(){modal('Add a Roblox account',`<p class="intro">Choose where to sign in.</p><button class="login-choice" data-action="loginExternal">${icon('globe')}<span><b>Default browser tab</b><small>Use Bitwarden in your usual browser, then approve Orbit’s Quick Login code</small></span>${icon('arrow')}</button><button class="login-choice" data-action="login">${icon('globe')}<span><b>Orbit browser window</b><small>Sign in in a separate window, then choose Use this account</small></span>${icon('arrow')}</button><button class="login-choice" data-action="cookieModal">${icon('shield')}<span><b>Add a session cookie</b><small>Use a session token you already have</small></span>${icon('arrow')}</button>`);}
+function editModal(id){const a=state.accounts.find(a=>a.id===id);if(!a)return;
+  modal('Account options',`<p class="intro">${esc(name(a))} · ${esc(handle(a))}</p><input type="hidden" id="edit-id" value="${a.id}"><div class="inline-fields">${field('Alias','edit-alias',a.alias)}${field('Group','edit-group',a.group)}</div><label class="field"><span>Notes</span><textarea id="edit-description">${esc(a.description)}</textarea></label><details class="advanced-options"><summary>Relaunch and custom fields</summary><div class="inline-fields">${field('Relaunch place ID','edit-place',a.placeId||'','number')}${field('Relaunch delay (seconds)','edit-delay',a.relaunchSeconds,'number')}</div>${field('Relaunch server / job ID','edit-job',a.jobId)}<label class="checkbox-line"><input type="checkbox" id="edit-auto" ${a.autoRelaunch?'checked':''}> Auto-relaunch tracked sessions</label><label class="field"><span>Custom fields (JSON object)</span><textarea id="edit-fields">${esc(JSON.stringify(a.fields||{},null,2))}</textarea></label></details><div class="heading-actions">${button('Open browser','browser','globe','small',`data-id="${a.id}"`)}${button('Tools','tools','sliders','small',`data-id="${a.id}"`)}${button('Profile','openProfile','','small ghost',`data-id="${a.id}"`)}</div>${actions('Save account','saveAccount')}`);}
+function backupModal(exp){modal(exp?'Export encrypted backup':'Import accounts',`<p class="intro">${exp?'Choose a password of at least 12 characters. You’ll need it to restore this backup.':'Choose an original AccountData file or an Orbit backup. Your existing files will stay intact. Matching accounts will have their sessions refreshed.'}</p>${field(exp?'Backup password':'File password (if required)','file-password','','password')}${exp?field('Confirm password','file-confirm','','password'):''}${actions(exp?'Choose save location':'Choose file',exp?'doExport':'doImport')}`);}
+function toolsModal(id){modal('Account tools',`<input type="hidden" id="tool-id" value="${id}"><p class="intro">Actions run on the selected account. Roblox may require additional verification or reject unsupported operations.</p><label class="field"><span>Action</span><select id="tool-name"><option value="profile">Read public profile</option><option value="balance">Read Robux balance</option><option value="blocked">Read blocked users</option><option value="displayName">Change display name</option><option value="friend">Send friend request</option><option value="block">Block user</option><option value="unblock">Unblock user</option><option value="quickLogin">Authorize quick login code</option></select></label>${field('Value / user ID / code','tool-value')}<pre id="tool-result" class="result" hidden></pre>${actions('Run action','runTool')}`);}
+function failureModal(id){const a=state.accounts.find(a=>a.id===id);if(!a)return;modal(a.status==='Needs login'?'Sign-in required':'Account action failed',`<p class="intro">${esc(name(a))} · ${esc(handle(a))}</p><div class="error-detail">${esc(a.lastError||'Open Activity for the error details.')}</div><div class="modal-actions">${button('View activity','openActivity','','ghost')}${a.status==='Needs login'?button('Sign in with Roblox','add','globe','primary'):button('Close','closeModal','','primary')}</div>`);}
+async function click(action,el){
+  const id=el.dataset.id;
+  switch(action){
+    case 'add':addModal();break;
+    case 'closeModal':$('#modal').close();break;
+    case 'loginExternal':await call('loginExternal');$('#modal').close();break;
+    case 'login':await call('login');$('#modal').close();break;
+    case 'cookieModal':modal('Add a session cookie',`<p class="intro">Only use a cookie belonging to an account you own. Orbit validates it with Roblox and stores it in your encrypted vault.</p><label class="field"><span>Session cookie</span><textarea id="cookie-input" spellcheck="false" placeholder=".ROBLOSECURITY session token"></textarea></label>${actions('Add account','saveCookie')}`);break;
+    case 'saveCookie':{const cookie=$('#cookie-input').value;await call('addCookie',{cookie});$('#cookie-input').value='';$('#modal').close();toast('Account added.');break;}
+    case 'import':backupModal(false);break;
+    case 'export':backupModal(true);break;
+    case 'doImport':await call('import',{password:$('#file-password').value});$('#modal').close();break;
+    case 'doExport':{const password=$('#file-password').value;if(password!==$('#file-confirm').value)throw Error('The passwords do not match.');await call('export',{password});$('#modal').close();break;}
+    case 'edit':editModal(id);break;
+    case 'editSelected':if(selected.size!==1)throw Error('Select one account to edit.');editModal([...selected][0]);break;
+    case 'browserSelected':if(selected.size!==1)throw Error('Select one account to open its browser.');return await call('browser',{id:[...selected][0]});
+    case 'saveAccount':{const fields=JSON.parse($('#edit-fields').value||'{}');if(!fields||Array.isArray(fields)||typeof fields!=='object'||Object.values(fields).some(v=>typeof v!=='string'))throw Error('Custom fields must be a JSON object with text values.');await call('editAccount',{id:$('#edit-id').value,alias:$('#edit-alias').value,group:$('#edit-group').value,description:$('#edit-description').value,fields,autoRelaunch:$('#edit-auto').checked,relaunchSeconds:Number($('#edit-delay').value),placeId:Number($('#edit-place').value),jobId:$('#edit-job').value});$('#modal').close();toast('Account saved.');break;}
+    case 'newGroup':if(!state.accounts.length)throw Error('Add an account first, then give it a group in Account options.');if(selected.size!==1)throw Error('Select one account, open its options, and enter a new group name.');editModal([...selected][0]);$('#edit-group').focus();break;
+    case 'refresh':await call('refresh',{ids:selected.size?[...selected]:state.accounts.map(a=>a.id)});break;
+    case 'launch':{if(!selected.size)throw Error('Select at least one account to launch.');if(!Number(launch.placeId))throw Error('Enter a valid numeric ID.');if(launch.mode==='private'&&!launch.jobId.trim())throw Error('Enter the private server link code.');const result=await call('launch',{ids:[...selected],placeId:Number(launch.placeId),jobId:launch.jobId,mode:launch.mode});if(result?.failed){const failed=state.accounts.find(a=>selected.has(a.id)&&a.lastError);if(selected.size===1&&failed)failureModal(failed.id);else toast(`${result.failed} account(s) failed. Click their status for details.`,true);}break;}
+    case 'showError':failureModal(id);break;
+    case 'openActivity':$('#modal').close();page='activity';render();break;
+    case 'remove':modal('Remove selected accounts?',`<p class="intro">Remove ${selected.size} account${selected.size===1?'':'s'} from Orbit’s vault? This does not delete your Roblox accounts.</p>${actions('Remove accounts','confirmRemove','danger')}`);break;
+    case 'confirmRemove':await call('remove',{ids:[...selected]});selected.clear();$('#modal').close();break;
+    case 'clearFilters':group='';query='';render();break;
+    case 'pickGame':launch.placeId=el.dataset.place;launch.mode='game';page='accounts';render();$('#launch-place').focus();break;
+    case 'favorite':await call('favorite',{placeId:Number(el.dataset.place)});break;
+    case 'removeGame':await call('removeGame',{placeId:Number(el.dataset.place)});break;
+    case 'addGame':modal('Add an experience',`<p class="intro">Find the place ID in a Roblox experience URL, just after /games/.</p>${field('Place ID','game-place','','number','4924922222')}${actions('Add to library','saveGame')}`);break;
+    case 'saveGame':await call('addGame',{placeId:Number($('#game-place').value)});$('#modal').close();break;
+    case 'servers':await servers(Number(el.dataset.place));break;
+    case 'moreServers':await servers(Number(el.dataset.place),el.dataset.cursor);break;
+    case 'pickServer':launch.placeId=el.dataset.place;launch.jobId=el.dataset.job;launch.mode='game';page='accounts';$('#modal').close();render();toast('Server selected. Choose accounts and launch.');break;
+    case 'goSettings':page='settings';render();break;
+    case 'saveSettings':await call('settings',{multiInstance:$('#multiInstance').checked,closePrevious:$('#closePrevious').checked,rememberWindows:$('#rememberWindows').checked,hideUsernames:$('#hideUsernames').checked,launchDelay:Number($('#launchDelay').value),apiEnabled:$('#apiEnabled').checked,apiPort:Number($('#apiPort').value),accent:$('#accent').value});toast('Preferences saved.');break;
+    case 'copyApiToken':await call('copyApiToken');toast('Access token copied.');break;
+    case 'browser':await call('browser',{id});$('#modal').close();break;
+    case 'openProfile':await call('openProfile',{id});break;
+    case 'tools':toolsModal(id);break;
+    case 'runTool':{const tool=$('#tool-name').value;if(!['profile','balance','blocked'].includes(tool)&&!$('#tool-value').value.trim())throw Error('Enter the required value.');const data=await call('accountTool',{id:$('#tool-id').value,tool,value:$('#tool-value').value});$('#tool-result').hidden=false;$('#tool-result').textContent=JSON.stringify(data,null,2);break;}
+    case 'stop':await call('stop',{ids:[...selected]});break; case 'cancelLaunch':await call('cancelLaunch');break;
+    case 'nexusSend':await call('nexusSend',{ids:[...selected],message:$('#nexus-message').value});break;
+  }
+}
+async function servers(placeId,cursor=''){
+  if(!cursor)modal('Find a public server','<p class="intro">Looking for available servers…</p>');
+  const result=await call('servers',{placeId,cursor});
+  modal('Public servers',`<p class="intro">Choose a server for place ${placeId}. You’ll choose accounts before launching.</p><div class="server-list">${(result.data||[]).map(s=>`<div class="server-row"><div>${s.playing} / ${s.maxPlayers} players<small>${esc(s.id)}</small></div>${button('Select','pickServer','','small primary',`data-place="${placeId}" data-job="${esc(s.id)}"`)}</div>`).join('')||'<div class="empty">No available servers found.</div>'}</div>${result.nextPageCursor?`<div class="modal-actions">${button('Next page','moreServers','arrow','ghost',`data-place="${placeId}" data-cursor="${esc(result.nextPageCursor)}"`)}</div>`:''}`);
+}
+document.addEventListener('click',event=>{
+  const nav=event.target.closest('[data-page]');if(nav){page=nav.dataset.page;group='';render();return;}
+  const g=event.target.closest('[data-group]');if(g){group=group===g.dataset.group?'':g.dataset.group;page='accounts';render();return;}
+  const el=event.target.closest('[data-action]');if(!el)return;
+  const action=el.dataset.action;
+  const simple=['add','closeModal','edit','editSelected','newGroup','cookieModal','import','export','addGame','remove','clearFilters','goSettings','pickGame','tools','cancelLaunch','showError','openActivity'];
+  const execute=async()=>{try{await click(action,el);}catch(e){const error=$('#modal-error');if($('#modal').open&&error)error.textContent=e.message;else toast(e.message,true);}};
+  if(simple.includes(action))execute();else run(execute);
+});
+document.addEventListener('input',e=>{
+  if(e.target.id==='search'){query=e.target.value;render();}
+  if(e.target.id==='launch-place')launch.placeId=e.target.value;
+  if(e.target.id==='launch-job')launch.jobId=e.target.value;
+});
+document.addEventListener('change',e=>{
+  if(e.target.dataset.select){e.target.checked?selected.add(e.target.dataset.select):selected.delete(e.target.dataset.select);render();}
+  if(e.target.id==='select-all'){visible().forEach(a=>e.target.checked?selected.add(a.id):selected.delete(a.id));render();}
+  if(e.target.id==='sort'){sort=e.target.value;render();}
+  if(e.target.id==='launch-mode'){launch.mode=e.target.value;render();}
+});
+$('#modal').addEventListener('click',e=>{if(e.target===$('#modal'))$('#modal').close();});
+window.orbitSmoke=async()=>{
+  const tests=[];const assert=(name,value)=>{tests.push({name,passed:!!value});if(!value)throw Error('UI assertion failed: '+name);};
+  assert('Relay color palette',getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()==='#91b6ee');assert('horizontal top tabs',document.querySelector('header nav')!==null);assert('control pane beside table',!!document.querySelector('.account-controls')&&!!document.querySelector('.accounts-panel'));assert('sample accounts rendered',document.querySelectorAll('[data-select]').length===7);
+  const malicious={...state.accounts[0],id:'xss-check',displayName:'<img src=x onerror=alert(1)>',alias:'<script>bad()</script>'};state.accounts.push(malicious);render();assert('names escaped',!document.querySelector('[onerror]'));state.accounts.pop();render();
+  assert('account browser requires a selection',$('[data-action="browserSelected"]').disabled);
+  const checkbox=document.querySelector('[data-select]');checkbox.click();assert('account selection',selected.size===1);
+  assert('account browser enabled for one selected account',!$('[data-action="browserSelected"]').disabled);
+  const opened=await click('browserSelected',{dataset:{}});assert('browser action targets the selected account',opened.accountId===[...selected][0]);
+  $('#search').value='northbound';$('#search').dispatchEvent(new Event('input',{bubbles:true}));assert('search filters rows',document.querySelectorAll('[data-select]').length===1);query='';render();
+  for(const p of ['games','control','activity','settings']){page=p;render();assert(p+' view renders',!!$('#main h1'));assert(p+' view fits horizontally',$('#main').scrollWidth<=$('#main').clientWidth);}
+  page='settings';render();assert('multi-instance reports disabled state',$('#multi-status').textContent.includes('off'));
+  state.settings.multiInstance=true;state.multiInstanceReady=true;render();assert('multi-instance reports active guard',$('#multi-status').textContent.includes('ready'));
+  state.multiInstanceReady=false;state.multiInstanceError='Close all Roblox clients <test>';render();assert('multi-instance activation error is visible and escaped',$('#multi-status').textContent.includes('Close all Roblox clients <test>')&&!$('#multi-status test'));state.settings.multiInstance=false;state.multiInstanceError='';
+  page='accounts';render();editModal(state.accounts[0].id);$('#edit-alias').value='Main account';await click('saveAccount',{dataset:{}});assert('bridge edit succeeded',!$('#modal').open);
+  state.accounts[0].status='Needs login';state.accounts[0].lastError='Roblox rejected the saved session (HTTP 401). Sign in again.';render();document.querySelector('[data-action="showError"]').click();assert('expired session has actionable error dialog',$('#modal').open&&!!$('#modal [data-action="add"]')&&$('#modal').textContent.includes('HTTP 401'));$('#modal').close();state.accounts[0].status='Offline';state.accounts[0].lastError='';render();
+  addModal();assert('both browser choices are visible',!!$('#modal [data-action="loginExternal"]')&&!!$('#modal [data-action="login"]'));await click('loginExternal',{dataset:{}});assert('default browser choice dispatches through native bridge',!$('#modal').open);addModal();await click('login',{dataset:{}});assert('embedded browser choice dispatches through native bridge',!$('#modal').open);
+  const result=await call('state');assert('bridge state omits credentials',!JSON.stringify(result).includes('SAMPLE_ACCOUNT_NO_REAL_CREDENTIALS')&&!Object.hasOwn(result.accounts[0],'securityToken'));
+  selected.add(state.accounts[1].id);launch.placeId='4924922222';render();assert('no horizontal overflow',document.documentElement.scrollWidth<=innerWidth);assert('table pane fits viewport',$('.accounts-panel').scrollWidth<=$('.accounts-panel').clientWidth);assert('tabs report active page',$('nav [data-page="accounts"]').getAttribute('aria-pressed')==='true');
+  document.querySelectorAll('[data-group]')[1].click();assert('group filter works',visible().every(a=>a.group===group)&&visible().length>0);document.querySelector('[data-group=""]').click();assert('all accounts filter restores rows',visible().length===7);
+  document.querySelectorAll('.toast').forEach(t=>t.remove());return {passed:tests.every(t=>t.passed),tests,sampleData:true,width:innerWidth,height:innerHeight};
+};
+window.orbitSmokeEmpty=async()=>{
+  const tests=[];const assert=(name,value)=>{tests.push({name,passed:!!value});if(!value)throw Error('UI assertion failed: '+name);};
+  assert('empty vault contains no fabricated accounts',state.accounts.length===0&&document.querySelectorAll('[data-select]').length===0);
+  assert('empty state offers add account',document.querySelectorAll('[data-action="add"]').length===2);
+  addModal();assert('default browser, embedded browser and cookie choices available',!!document.querySelector('[data-action="loginExternal"]')&&!!document.querySelector('[data-action="login"]')&&!!document.querySelector('[data-action="cookieModal"]'));$('#modal').close();
+  for(const p of ['games','control','activity','settings']){page=p;render();assert('empty '+p+' page renders',!!$('#main h1'));}
+  page='accounts';render();assert('narrow viewport has no horizontal overflow',document.documentElement.scrollWidth<=innerWidth);
+  return {passed:tests.every(t=>t.passed),tests,sampleData:false,width:innerWidth,height:innerHeight};
+};
+call('state').then(data=>{state=data;render();}).catch(e=>{$('#main').innerHTML=empty('shield','Orbit desktop',esc(e.message));});

@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath Condition="'$(OrbitBuildRoot)' != ''">$(OrbitBuildRoot)\obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath Condition="'$(OrbitBuildRoot)' != ''">$(OrbitBuildRoot)\bin\</BaseOutputPath>
+  </PropertyGroup>
+</Project>

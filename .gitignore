@@ -1,0 +1,26 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# Local published builds and shortcuts
+app/
+publish/
+*.exe
+*.dll
+*.pdb
+*.lnk
+*.zip
+
+# Local account vaults, sessions, backups and environment secrets
+.env
+.env.*
+vault.dat*
+activity.json
+WebView/
+Browsers/
+BrowsersWithExtensions/
+ExtensionPackages/
+*.orbit
+*.backup
