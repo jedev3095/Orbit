@@ -21,13 +21,35 @@ public sealed class CsvAuditTests
         string csv = "type,name,login_uri,login_username,login_password\nLogin,Roblox,\"https://example.invalid,https://www.roblox.com/login\",user,pw-value\n";
         Assert.Equal("pw-value", Assert.Single(CredentialCsv.Read(csv).Logins).Password);
     }
+    [Theory]
+    [InlineData("androidapp://com.roblox.client", true)]
+    [InlineData("androidapp://com.roblox.client.attacker.invalid", false)]
+    [InlineData("https://www.roblox.com./login", true)]
+    [InlineData("https://ROBLOX.COM/login", true)]
+    [InlineData("https://roblox.com.attacker.invalid", false)]
+    public void ImportRecognizesRobloxWebAndAndroidUris(string site, bool expected)
+    {
+        var plan = CredentialCsv.Read("login_uri,login_username,login_password\n" + site + ",user,synthetic-password");
+        Assert.Equal(expected, plan.Logins.Count == 1);
+        Assert.True(Assert.Single(plan.Rows!).CanSelect);
+    }
+    [Fact] public void PreviewShowsRealSourceDomainsWithoutUrlSecrets()
+    {
+        var plan = CredentialCsv.Read("login_uri,login_username,login_password\n" + Quote("https://url-user:url-password@www.roblox.com/private-path?token=private-query#private-fragment,https://other.invalid/path") + ",user,synthetic-password");
+        var row = Assert.Single(plan.Rows!); Assert.Equal("www.roblox.com, other.invalid", row.Website);
+        Assert.DoesNotContain("url-password", row.Website); Assert.DoesNotContain("private-", row.Website); Assert.DoesNotContain("url-user", row.Website);
+        var other = Assert.Single(CredentialCsv.Read("login_uri,login_username,login_password\nhttps://other.invalid/path,user,synthetic-password").Rows!);
+        Assert.Equal("other.invalid", other.Website); Assert.False(other.Selected); Assert.True(other.CanSelect);
+        Assert.Equal("https://www.roblox.com", other.Login!.Website);
+    }
     [Fact] public void MissingSitesAndOtherSkippedRowsHaveReasonsAndExplicitChoices()
     {
         string csv = "type,name,login_uri,login_username,login_password\nlogin,No site,,user,pw-value\nlogin,Other,https://example.invalid,user,pw-value\nlogin,Passkey,https://roblox.com,user,\nnote,Note,,,\n";
         var plan = CredentialCsv.Read(csv); Assert.Empty(plan.Logins); Assert.Equal(4, plan.Skipped);
         Assert.NotNull(plan.Rows); Assert.Equal(4, plan.Rows.Count);
         Assert.True(plan.Rows[0].CanSelect); Assert.False(plan.Rows[0].Selected); Assert.NotNull(plan.Rows[0].Login);
-        Assert.All(plan.Rows.Skip(1), row => Assert.False(row.CanSelect));
+        Assert.True(plan.Rows[1].CanSelect); Assert.False(plan.Rows[1].Selected);
+        Assert.All(plan.Rows.Skip(2), row => Assert.False(row.CanSelect));
         Assert.All(plan.Rows, row => { Assert.NotEmpty(row.Reason); Assert.DoesNotContain("pw-value", row.Reason); });
     }
     [Fact] public void CanonicalBitwardenColumnsCannotBeDisplacedByOtherNamedColumns()
@@ -77,8 +99,19 @@ public sealed class CsvAuditTests
         var plan = CredentialCsv.Read("name,login_uri,login_username,login_password\nRoblox,https://roblox.com,shared,new-password\nMissing site,,second,new-password\nOther,https://example.invalid,other,other-password\nRoblox,https://roblox.com,shared,old-password\n");
         using var preview = new CredentialImportPreview(plan, store); preview.Show(); await Task.Delay(100);
         var grid = Assert.Single(preview.Controls.OfType<DataGridView>());
-        Assert.Single(preview.SelectedLogins); Assert.False(grid.Rows[1].Cells[0].ReadOnly); Assert.True(grid.Rows[2].Cells[0].ReadOnly); Assert.True(grid.Rows[3].Cells[0].ReadOnly);
-        grid.Rows[1].Cells[0].Value = true; Assert.Equal(2, preview.SelectedLogins.Count);
+        Assert.Single(preview.SelectedLogins); Assert.False(grid.Rows[1].Cells[0].ReadOnly); Assert.False(grid.Rows[2].Cells[0].ReadOnly); Assert.True(grid.Rows[3].Cells[0].ReadOnly);
+        void ClickCheckbox(int row) => typeof(DataGridView).GetMethod("OnCellContentClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(grid, [new DataGridViewCellEventArgs(0, row)]);
+        void PressSpace(int row)
+        {
+            grid.CurrentCell = grid.Rows[row].Cells[0];
+            typeof(DataGridView).GetMethod("OnKeyDown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(grid, [new KeyEventArgs(Keys.Space)]);
+        }
+        ClickCheckbox(1); Assert.Equal(2, preview.SelectedLogins.Count);
+        ClickCheckbox(1); Assert.Single(preview.SelectedLogins);
+        PressSpace(1); Assert.Equal(2, preview.SelectedLogins.Count);
+        ClickCheckbox(2); Assert.Equal(3, preview.SelectedLogins.Count);
+        ClickCheckbox(2); Assert.Equal(2, preview.SelectedLogins.Count);
+        ClickCheckbox(3); Assert.Equal(2, preview.SelectedLogins.Count);
         Assert.Equal(2, store.Import(preview.SelectedLogins)); Assert.Equal(3, store.Count); Assert.Contains(store.List(), e => e.Username == "second");
         string folder = Path.Combine(AppContext.BaseDirectory, "TestResults", "passwords"); Directory.CreateDirectory(folder);
         using var image = new System.Drawing.Bitmap(preview.Width, preview.Height); preview.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, preview.Width, preview.Height)); image.Save(Path.Combine(folder, "import-preview.png"));

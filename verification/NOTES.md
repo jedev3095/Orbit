@@ -1,4 +1,10 @@
-# Current verification (0.3.1)
+# Current verification (0.3.2)
+
+29 October 2026. Reworked import selection to handle checkbox content clicks and Space explicitly, without relying on the grid entering edit mode. Valid username/password rows with unrecognized websites can now be selected manually; they remain unchecked by default. Exact duplicates and rows missing required credentials remain disabled. The preview shows actual source domains/app identifiers rather than a generic non-Roblox label, excluding embedded credentials, paths, query strings and fragments. Automatic matching also recognizes the official Roblox Android URI and DNS names with a trailing dot. The user's specific rejected URL was not available, so its cause is not claimed as confirmed.
+
+Validation: 74 cases passed with native UI enabled; two opt-in live integration tests skipped. The preview regression now invokes checkbox content-click and Space events, verifies selection/deselection and disabled duplicates, and imports the resulting selection. Earlier coverage only assigned checkbox values programmatically. Added cases cover source domain visibility with URL secret removal, Android app matching, trailing-dot domains and spoof rejection. Synthetic native preview rendering was inspected. No actual CSV or credentials were read. Official Android package reference: https://play.google.com/store/apps/details?id=com.roblox.client .
+
+# Verification (0.3.1)
 
 29 October 2026. Audited the Bitwarden CSV importer and fixed three confirmed defects: username-only deduplication discarded distinct logins, the previous CSV reader removed blank lines inside quoted fields, and comma-separated Bitwarden URI arrays could hide Roblox entries. Replaced the reader with strict, bounded CSV parsing that preserves password characters and newline sequences exactly. Canonical Bitwarden headers take precedence over generic aliases; malformed records fail before storage changes.
 

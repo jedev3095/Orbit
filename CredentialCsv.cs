@@ -34,17 +34,35 @@ public static class CredentialCsv
             string username = Value(user).Trim(), secret = Value(password), sites = Value(website).Trim();
             string reason = "Roblox login"; bool canSelect = true, selected = true;
             // Bitwarden serializes its URI array into a comma-separated CSV cell.
-            bool roblox = sites.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Any(s => CredentialVault.RobloxWebsite(s.Trim()));
+            var websites = sites.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            bool roblox = websites.Any(IsRobloxImportSite);
             if (type >= 0 && !Value(type).Trim().Equals("login", StringComparison.OrdinalIgnoreCase)) { reason = "Not a login item"; canSelect = selected = false; }
             else if (username.Length == 0) { reason = "Missing username/email"; canSelect = selected = false; }
             else if (secret.Length == 0) { reason = "No password (possibly passkey-only)"; canSelect = selected = false; }
             else if (username.Length > 512 || secret.Length > 4096) { reason = "Username/password exceeds limits"; canSelect = selected = false; }
             else if (sites.Length == 0) { reason = "No website: tick only if this is a Roblox login"; selected = false; }
-            else if (!roblox) { reason = "Website is not Roblox"; canSelect = selected = false; }
+            else if (!roblox) { reason = "Website not recognized: tick only if this is a Roblox login"; selected = false; }
             var candidate = canSelect ? new SavedLogin { Name = label, Username = username, Password = secret } : null;
-            rows.Add(new(number, candidate, label, username.Length <= 512 ? username : "[too long]", sites.Length == 0 ? "[none]" : roblox ? "roblox.com" : "[non-Roblox site]", reason, selected, canSelect));
+            rows.Add(new(number, candidate, label, username.Length <= 512 ? username : "[too long]", DisplayWebsites(websites), reason, selected, canSelect));
         }
         return new(rows.Where(r => r.Selected).Select(r => r.Login!).ToList(), rows.Count(r => !r.Selected), rows);
+    }
+    private static bool IsRobloxImportSite(string site)
+    {
+        if (CredentialVault.RobloxWebsite(site)) return true;
+        // Bitwarden can associate a mobile app URI with the same saved login.
+        return Uri.TryCreate(site, UriKind.Absolute, out var uri) && uri.Scheme == "androidapp" && uri.Host.Equals("com.roblox.client", StringComparison.OrdinalIgnoreCase);
+    }
+    private static string DisplayWebsites(IEnumerable<string> websites)
+    {
+        var labels = websites.Select(site =>
+        {
+            if (!Uri.TryCreate(site.Contains("://") ? site : "https://" + site, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host)) return "[unrecognized website format]";
+            // Show the source domain/app identifier, never userinfo, path,
+            // query or fragment: those can contain exported login secrets.
+            return uri.Scheme == "androidapp" ? "androidapp://" + uri.Host : uri.Host;
+        }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return labels.Length == 0 ? "[none]" : string.Join(", ", labels);
     }
     // Strict RFC-style CSV state machine: preserve every character inside a
     // field, including CR/LF sequences, blank lines, spaces, Unicode and quotes.

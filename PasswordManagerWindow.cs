@@ -114,7 +114,7 @@ internal sealed class CredentialImportPreview : Form
     public CredentialImportPreview(CredentialImportPlan plan, CredentialVault? store = null, bool preserveLinks = false)
     {
         PasswordUi.Theme(this); Text = "Review password import"; Size = new(1000, 570); MinimumSize = new(760, 440);
-        grid.ReadOnly = false; grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "include", HeaderText = "Import", FillWeight = 45 });
+        grid.ReadOnly = false; grid.EditMode = DataGridViewEditMode.EditProgrammatically; grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "include", HeaderText = "Import", FillWeight = 45 });
         foreach (var (key, title) in new[] { ("row", "CSV record"), ("name", "Name"), ("username", "Username / email"), ("website", "Website"), ("status", "Import status / reason") }) { int index = grid.Columns.Add(key, title); grid.Columns[index].ReadOnly = true; }
         grid.Columns["row"].FillWeight = 55; grid.Columns["status"].FillWeight = 180;
         var rows = plan.Rows ?? plan.Logins.Select((entry, i) => new CredentialImportRow(i + 1, entry, entry.Name, entry.Username, "roblox.com", "Login", true, true)).ToList();
@@ -127,11 +127,22 @@ internal sealed class CredentialImportPreview : Form
             var row = grid.Rows[index]; row.Tag = item.Login; row.Cells[0].ReadOnly = !item.CanSelect || duplicate;
             if (item.Login is not null && item.Selected && !duplicate) seen.Add(item.Login);
         }
-        var message = new Label { Dock = DockStyle.Top, Height = 105, Padding = new(12), Text = $"{rows.Count} records reviewed; {plan.Logins.Count} matched Roblox automatically. Every excluded record has a reason below.\nNo-website login rows are unchecked: tick one only if you know it belongs to Roblox. Different passwords/names stay separate; existing passwords are never overwritten.\nPasswords are hidden. Notes, passkeys and TOTP are not imported. CSV originals remain plaintext and unchanged." };
+        var message = new Label { Dock = DockStyle.Top, Height = 105, Padding = new(12), Text = $"{rows.Count} records reviewed; {plan.Logins.Count} matched Roblox automatically. Every excluded record has a reason below.\nUnrecognized/missing websites stay unchecked: tick only logins you know belong to Roblox. Different passwords/names stay separate; existing passwords are never overwritten.\nPasswords are hidden. Notes, passkeys and TOTP are not imported. CSV originals remain plaintext and unchanged." };
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 46, FlowDirection = FlowDirection.RightToLeft };
         var import = PasswordUi.Button("Import selected encrypted", () => DialogResult = DialogResult.OK); buttons.Controls.Add(import); buttons.Controls.Add(PasswordUi.Button("Cancel", () => Close()));
         void UpdateButton() => import.Enabled = SelectedLogins.Count > 0;
-        grid.CurrentCellDirtyStateChanged += (_, _) => { if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
+        void Toggle(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= grid.Rows.Count) return;
+            var cell = grid.Rows[rowIndex].Cells[0];
+            if (!cell.ReadOnly) cell.Value = cell.Value is not true;
+        }
+        grid.CellContentClick += (_, e) => { if (e.ColumnIndex == 0) Toggle(e.RowIndex); };
+        grid.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Space || grid.CurrentCell?.ColumnIndex != 0) return;
+            Toggle(grid.CurrentCell.RowIndex); e.Handled = true; e.SuppressKeyPress = true;
+        };
         grid.CellValueChanged += (_, _) => UpdateButton();
         Controls.Add(grid); Controls.Add(message); Controls.Add(buttons); UpdateButton();
     }

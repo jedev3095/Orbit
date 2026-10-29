@@ -43,7 +43,8 @@ public sealed class CredentialVault
     {
         if (string.IsNullOrWhiteSpace(website)) return false;
         if (!Uri.TryCreate(website.Contains("://") ? website : "https://" + website, UriKind.Absolute, out var uri)) return false;
-        return uri.Scheme is "https" or "http" && (uri.Host == "roblox.com" || uri.Host.EndsWith(".roblox.com", StringComparison.OrdinalIgnoreCase));
+        string host = uri.Host.TrimEnd('.');
+        return uri.Scheme is "https" or "http" && (host.Equals("roblox.com", StringComparison.OrdinalIgnoreCase) || host.EndsWith(".roblox.com", StringComparison.OrdinalIgnoreCase));
     }
     private static List<SavedLogin> Validate(IEnumerable<SavedLogin> items)
     {
