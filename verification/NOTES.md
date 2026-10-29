@@ -1,4 +1,14 @@
-# Current verification (0.2.3)
+# Current verification (0.3.0)
+
+29 October 2026. Replaced embedded Bitwarden integration with an opt-in local Roblox password manager, separate DPAPI CurrentUser password storage, CSV previews/import, encrypted portable password exports, and saved-login session refresh. No real credential CSV was imported during development. Browser extensions are disabled in the new profiles; old extension profiles were not deleted.
+
+Local validation: 59 xUnit cases passed with native UI enabled; the two live account-launch/public-search cases were skipped. Application dependencies had no reported NuGet vulnerabilities. Nine extension-specific checks were removed with the retired integration; the remaining legacy regression suite continues in the test assembly.
+
+Storage tests cover encrypted current/backup files, purpose-separated DPAPI decryption, corrupted-file preservation and recovery, authenticated portable export/wrong-password/tamper rejection, additive duplicate handling, validation before writes, metadata-only app state and password redaction. CSV tests cover Bitwarden and common aliases, UTF-8 BOM, quoted commas/quotes/multiline fields, unrelated/host-spoofed websites and sanitized malformed-input errors. Daily backup tests cover a separate encrypted password snapshot.
+
+Native tests use synthetic credentials and locally intercepted login/home responses. They exercise filling special-character passwords into controlled inputs, delayed button readiness, a single form submission, session validation for the selected user ID, retained aliases, credential linking and browser close. The initial login navigation is cancelled by an exact test URL gate so test requests cannot escape to the real login page. The actual Roblox login form and live CAPTCHA/2FA were not tested with real passwords. Native manager rendering was checked with a synthetic entry and no password grid column. Original game-launch tests remain scoped to their earlier versions.
+
+# Verification (0.2.3)
 
 29 October 2026. Fixed account-table scrolling jumping to the top when background state notifications rebuilt the dashboard. Render now captures and restores table, sidebar and page scroll offsets after restoring focus, using preventScroll when focusing inputs. Table position resets when the user changes the account search, group or sorting; sidebar position remains stable within the same page.
 

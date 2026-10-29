@@ -113,7 +113,7 @@ public sealed class QuickLoginWindow : Form
         try
         {
             currentCode = await login.Create(cancellation.Token); code.Text = currentCode;
-            status.Text = "In your browser, sign in with Bitwarden if needed. Enter this code in Roblox Quick Login, review the account, then approve. Orbit will add it automatically.";
+            status.Text = "In your browser, sign in if needed. Enter this code in Roblox Quick Login, review the account, then approve. Orbit will add it automatically.";
             OpenBrowser();
             while (DateTimeOffset.UtcNow < login.Expires)
             {

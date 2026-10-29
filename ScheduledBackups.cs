@@ -49,9 +49,10 @@ public sealed class ScheduledBackups : IDisposable
         if (running is { IsCompleted: false }) return running;
         if (policy is null) return Task.CompletedTask;
         var current = policy; string snapshot = Json.Write(app.Vault.Data); var token = work.Token;
-        running = Write(current, snapshot, token); return running;
+        string? logins = app.Credentials.Available ? Json.Write(app.Credentials.List()) : null;
+        running = Write(current, snapshot, logins, token); return running;
     }
-    private async Task Write(Policy current, string snapshot, CancellationToken token)
+    private async Task Write(Policy current, string snapshot, string? logins, CancellationToken token)
     {
         try
         {
@@ -60,6 +61,13 @@ public sealed class ScheduledBackups : IDisposable
                 var bytes = Vault.EncodeBackup(Json.Read<Database>(snapshot), current.Password); token.ThrowIfCancellationRequested();
                 string path = Path.Combine(current.Folder, $"Orbit-{current.Id}-{DateTime.UtcNow:yyyyMMdd-HHmmss-fffffff}.orbit");
                 await File.WriteAllBytesAsync(path + ".tmp", bytes, token); token.ThrowIfCancellationRequested(); File.Move(path + ".tmp", path);
+                if (logins is not null)
+                {
+                    byte[] passwords = CredentialVault.EncodeExport(Json.Read<List<SavedLogin>>(logins), current.Password);
+                    string passwordPath = Path.ChangeExtension(path, ".orbitlogins");
+                    await File.WriteAllBytesAsync(passwordPath + ".tmp", passwords, token); token.ThrowIfCancellationRequested(); File.Move(passwordPath + ".tmp", passwordPath);
+                    foreach (var old in new DirectoryInfo(current.Folder).GetFiles($"Orbit-{current.Id}-*.orbitlogins").OrderByDescending(f => f.Name).Skip(7)) old.Delete();
+                }
                 foreach (var old in new DirectoryInfo(current.Folder).GetFiles($"Orbit-{current.Id}-*.orbit").OrderByDescending(f => f.Name).Skip(7)) old.Delete();
             }, token);
             if (ReferenceEquals(policy, current)) { current.LastSuccess = DateTime.UtcNow; Save(current); LastError = ""; app.Log("Scheduled encrypted backup saved (latest seven retained)."); }

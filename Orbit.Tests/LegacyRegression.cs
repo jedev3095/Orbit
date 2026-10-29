@@ -44,26 +44,6 @@ public static class SelfTests
                 Check("Failed activation releases partially acquired singleton", rolledBack.WaitOne(0)); rolledBack.ReleaseMutex();
             }
             Check("Cookie header normalized", Input.Cookie(".ROBLOSECURITY=" + cookie + "; Path=/") == cookie);
-            const string bitwardenId = "nngceckbapebfimnlniiiahkandclblb";
-            string fakeLocal = Path.Combine(dir, "fake-local"), fakeRoaming = Path.Combine(dir, "fake-roaming");
-            string extensionRoot = Path.Combine(fakeLocal, "Google", "Chrome", "User Data", "Default", "Extensions", bitwardenId, "1.2.3_0");
-            Directory.CreateDirectory(Path.Combine(extensionRoot, "popup")); Directory.CreateDirectory(Path.Combine(extensionRoot, "_metadata"));
-            using (var resource = typeof(SelfTests).Assembly.GetManifestResourceStream("Orbit.testdata.bitwarden-manifest.json")!)
-            using (var target = File.Create(Path.Combine(extensionRoot, "manifest.json"))) resource.CopyTo(target);
-            File.WriteAllText(Path.Combine(extensionRoot, "popup", "index.html"), "<!doctype html><title>Fixture</title>");
-            File.WriteAllText(Path.Combine(extensionRoot, "_metadata", "fixture.json"), "not copied");
-            string sourceManifest = File.ReadAllText(Path.Combine(extensionRoot, "manifest.json"));
-            var extension = BitwardenIntegration.Inspect(extensionRoot);
-            Check("Bitwarden public-key identity matches browser extension ID", extension.Id == bitwardenId);
-            Check("Bitwarden discovery finds code under a browser extension folder", BitwardenIntegration.Discover(fakeLocal, fakeRoaming).Single().Id == bitwardenId);
-            var cachedExtension = BitwardenIntegration.Cache(extension, Path.Combine(dir, "extension-cache"));
-            Check("Extension code copied to Orbit-owned package", File.Exists(Path.Combine(cachedExtension.Path, "popup", "index.html")));
-            Check("Reserved browser metadata is not copied", !Directory.Exists(Path.Combine(cachedExtension.Path, "_metadata")));
-            Check("Original extension package remains unchanged", sourceManifest == File.ReadAllText(Path.Combine(extensionRoot, "manifest.json")));
-            Check("Bitwarden popup origin accepted", BitwardenIntegration.ExtensionPage($"chrome-extension://{bitwardenId}/popup/index.html", bitwardenId));
-            Check("Foreign extension origin rejected", !BitwardenIntegration.ExtensionPage("chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/popup.html", bitwardenId));
-            Reject("Extension popup traversal rejected", () => BitwardenIntegration.PopupUrl(bitwardenId, "../private.html"));
-            Reject("Remote popup URL rejected", () => BitwardenIntegration.PopupUrl(bitwardenId, "https://example.com/"));
             Reject("Cookie header injection rejected", () => Input.Cookie(cookie + "\r\nHeader: value"));
             var vault = new Vault(dir);
             var account = new Account { UserId = 42, Username = "offline-test", SecurityToken = cookie, Fields = new() { ["note"] = "value" } };

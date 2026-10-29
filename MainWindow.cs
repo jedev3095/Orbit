@@ -82,6 +82,21 @@ public sealed class MainWindow : Form
             object? result;
             switch (action)
             {
+                case "manageLogins":
+                    if (!app.IsDemo) new PasswordManagerWindow(app.Credentials, id => OpenSavedLogin(id)).Show(this);
+                    result = null; break;
+                case "savedLogin":
+                    if (!app.IsDemo) new PasswordManagerWindow(app.Credentials, id => OpenSavedLogin(id)).Show(this);
+                    result = null; break;
+                case "refreshLogin":
+                    var refreshAccount = app.Find(p.GetProperty("id").GetGuid());
+                    if (!app.IsDemo)
+                    {
+                        var storedLogin = app.Credentials.ForAccount(refreshAccount);
+                        if (storedLogin is not null) OpenSavedLogin(storedLogin.Id, refreshAccount);
+                        else new PasswordManagerWindow(app.Credentials, id => OpenSavedLogin(id, refreshAccount), refreshAccount).Show(this);
+                    }
+                    result = null; break;
                 case "configureBackups":
                     if (!app.IsDemo)
                     {
@@ -100,7 +115,7 @@ public sealed class MainWindow : Form
                 case "login":
                     if (!app.IsDemo)
                     {
-                        var login = Application.OpenForms.OfType<AccountBrowser>().FirstOrDefault(b => b.IsSignIn);
+                        var login = Application.OpenForms.OfType<AccountBrowser>().FirstOrDefault(b => b.IsSignIn && b.AccountId is null);
                         if (login is null) new AccountBrowser(app).Show(this);
                         else { login.Show(); login.Activate(); }
                     }
@@ -109,7 +124,7 @@ public sealed class MainWindow : Form
                     var browserAccount = app.Find(p.GetProperty("id").GetGuid());
                     if (!app.IsDemo)
                     {
-                        var browser = Application.OpenForms.OfType<AccountBrowser>().FirstOrDefault(b => b.AccountId == browserAccount.Id);
+                        var browser = Application.OpenForms.OfType<AccountBrowser>().FirstOrDefault(b => !b.IsSignIn && b.AccountId == browserAccount.Id);
                         if (browser is null) new AccountBrowser(app, browserAccount).Show(this);
                         else { if (browser.WindowState == FormWindowState.Minimized) browser.WindowState = FormWindowState.Normal; browser.Show(); browser.Activate(); }
                     }
@@ -132,6 +147,12 @@ public sealed class MainWindow : Form
     }
     private void Reply(object result) { if (!closing && Input.TrustedOrigin(view.Source?.AbsoluteUri ?? "")) view.CoreWebView2.PostWebMessageAsJson(Json.Write(result)); }
     private void FocusAcceptedAccount(Guid id) => Reply(new { type = "accountAccepted", id });
+    private void OpenSavedLogin(Guid id, Account? target = null)
+    {
+        var existing = Application.OpenForms.OfType<AccountBrowser>().FirstOrDefault(b => b.IsSignIn && b.AccountId == target?.Id);
+        if (existing is not null) { existing.Close(); }
+        new AccountBrowser(app, target, refreshSession: target is not null, credentialId: id).Show(this);
+    }
     private object? Import(JsonElement p)
     {
         using var dialog = new OpenFileDialog { Title = "Import accounts or an Orbit backup", Filter = "Account data|*.json;*.backup;*.orbit;*.dat|All files|*.*" };

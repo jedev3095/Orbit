@@ -10,13 +10,28 @@ Download the app ZIP from Releases, extract the **entire archive** into one fold
 
 Choose **Add account**:
 
+- **Saved local login** opens the local password manager. Add a login or import a password-manager CSV, then choose Fill & sign in. No cloud password-manager login is needed.
 - **Default browser tab** opens Roblox Quick Login in your normal browser, where existing password-manager extensions are available. Enter the code shown by Orbit, review the account and approve. Orbit then saves the resulting session. If Roblox redirects to sign-in first, choose Open browser again afterward or open Roblox Settings → Quick Login.
-- **Orbit browser window** opens a separate browser profile. Finish signing in and any verification; when Roblox opens its home page, Orbit validates the session, saves the account and selects it in the table automatically. **Use this account** remains available as a manual retry. Failed validation is shown in the browser and Activity. An optional Bitwarden popup can load extension code from supported installed Chromium browsers, with its own Orbit profile and independent sign-in.
+- **Orbit browser window** opens a separate browser profile. Finish signing in and any verification; when Roblox opens its home page, Orbit validates the session, saves the account and selects it in the table automatically. **Use this account** remains available as a manual retry. Failed validation is shown in the browser and Activity. The embedded browser no longer loads Bitwarden or other browser extensions.
 - **Session cookie** accepts an existing session belonging to you.
 
 Select exactly one account and choose **Open browser** above the table to browse using that saved session. Repeating the action brings its account window forward. An expired or revoked session requires signing in again; re-adding the same user refreshes its session while retaining aliases, groups and notes.
 
-Authentication uses `.ROBLOSECURITY`. Orbit does not store account passwords, including password fields from old imports. Existing historical encrypted backups can still contain fields written by older versions.
+Game launching still uses `.ROBLOSECURITY`. Passwords deliberately saved in the new local password manager live in a separate encrypted store; unused password fields in legacy account imports are still discarded.
+
+## Local password manager
+
+Open **Settings → Password manager / CSV import**, or **Add account → Saved local login**. This manager is scoped to Roblox logins. Add, edit or delete entries locally; passwords are masked and never included in the dashboard state or local API. There is no cloud account, telemetry upload or separate master-password unlock.
+
+The file `%LOCALAPPDATA%\Orbit\logins.dat` and its previous-save backup are encrypted with Windows DPAPI **CurrentUser**, with purpose-specific entropy. It unlocks through your existing Windows user session. This protects copied files at rest; it does not isolate them from other software already running as the same Windows user. Recovery offers the previous local password-vault backup and preserves unreadable originals. Old extension profiles are left untouched but are no longer opened or loaded.
+
+**Import CSV** accepts UTF-8 comma-separated Bitwarden exports and common browser/LastPass/1Password-style username/password exports with recognized header names. It handles quoted commas, escaped quotes, line breaks and BOMs. A preview shows only Roblox entries; unrelated websites, secure notes, passkeys and TOTP are not imported. Existing usernames are skipped instead of silently overwriting passwords. Edit an existing entry explicitly to change its password. Imports are bounded by file/row limits and validated before the encrypted store is replaced.
+
+CSV exports are plaintext. Orbit reads your chosen file and encrypts its own stored copy without changing the original. Remove or protect the original export after use; Orbit does not claim to encrypt or erase that source file. See [Bitwarden export formats](https://bitwarden.com/help/export-your-data/) and [CSV field definitions](https://bitwarden.com/help/condition-bitwarden-import/).
+
+For an expired account, open its account options or error dialog and choose **Refresh sign-in**. A matching saved login opens a fresh embedded login profile and fills/submits the official HTTPS Roblox login form once. You complete CAPTCHA or two-step verification if required. After the home page opens, Orbit validates and stores the new session. It checks the returned Roblox user ID against the selected account, so a wrong saved login cannot replace that account. A successful login can be linked by user ID, including logins that use an email address. Autofill is restricted to the top-level Roblox login page and will not submit again automatically after a login failure.
+
+**Encrypted export** creates an `.orbitlogins` file using AES-256-GCM and PBKDF2-SHA256 (600,000 iterations), with independent random salt/nonce and a password of at least 12 characters. Restore export previews and merges these logins without overwriting existing usernames. These password exports are separate from ordinary `.orbit` account exports. Scheduled daily backups now produce an additional encrypted `.orbitlogins` snapshot using the configured backup password, retaining the latest seven of each type. Historical backups can still contain deleted entries; keep a copy of the export password for recovery on another Windows account or PC.
 
 ## Places and launching
 
@@ -74,7 +89,7 @@ GitHub Actions runs the offline xUnit suite and a Windows release publish. The a
 
 ## Architecture and limits
 
-`AppService` dispatches commands and owns application state. `LaunchService` manages launch queues and bounded retries; `ProcessTracker` verifies process ownership; `AccountTools` wraps account operations; `ActivityStore` debounces persistence; `ScheduledBackups` manages opt-in exports. `ControlServer` marshals work through the UI dispatcher. Roblox browser windows have no native message bridge; the dashboard bridge admits only its exact local origin.
+`AppService` dispatches commands and owns application state. `LaunchService` manages launch queues and bounded retries; `ProcessTracker` verifies process ownership; `AccountTools` wraps account operations; `ActivityStore` debounces persistence; `ScheduledBackups` manages opt-in exports. `CredentialVault` protects local logins, `CredentialCsv` validates imports, and native password-manager dialogs keep secrets out of the WebView dashboard. `ControlServer` marshals work through the UI dispatcher. Roblox browser windows have no native message bridge; the dashboard bridge admits only its exact local origin.
 
 A live two-client launch/process observation passed in place 189707 after the safety changes. This verifies concurrent client survival, not every game mode or a permanent guarantee of Roblox compatibility. See `verification/NOTES.md` for evidence and scope. Account mutation tools, private/follow launches and every historical manager feature have not all been live-tested. Avatar editing, bulk password login, updater, legacy UWP paths, client-settings/FPS patching and full Nexus UI parity remain outside this release.
 

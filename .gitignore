@@ -25,6 +25,9 @@ ExtensionPackages/
 *.orbit
 *.backup
 backup-policy.*
+logins.dat*
+*.orbitlogins
+*.csv
 **/TestResults/
 verification/**/*.png
 verification/*.png

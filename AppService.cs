@@ -8,6 +8,7 @@ namespace Orbit;
 public sealed class AppService : IDisposable
 {
     public Vault Vault { get; }
+    public CredentialVault Credentials { get; }
     public RobloxApi Api { get; }
     public List<Activity> Activity { get; } = [];
     public bool IsDemo { get; }
@@ -27,7 +28,8 @@ public sealed class AppService : IDisposable
     private readonly ActivityStore activityStore;
     public AppService(Vault vault, bool demo = false, RobloxApi? api = null, Func<MultiInstanceGuard>? multiFactory = null)
     {
-        Vault = vault; IsDemo = demo; Api = api ?? new RobloxApi(); createMulti = multiFactory ?? MultiInstanceGuard.Start;
+        Vault = vault; Credentials = new CredentialVault(vault.DirectoryPath); IsDemo = demo; Api = api ?? new RobloxApi(); createMulti = multiFactory ?? MultiInstanceGuard.Start;
+        Credentials.Changed += Notify;
         if (!demo)
         {
             try { if (File.Exists(Path.Combine(vault.DirectoryPath, "activity.json"))) Activity.AddRange(Json.Read<List<Activity>>(File.ReadAllText(Path.Combine(vault.DirectoryPath, "activity.json"))).Take(200)); } catch { }
@@ -44,11 +46,12 @@ public sealed class AppService : IDisposable
         try { await Dispatch(() => { if (ReferenceEquals(Server, source)) { Server = null; source.Dispose(); Log($"Local API listener stopped unexpectedly ({error.GetType().Name}, 0x{error.HResult:X8}). Save local control settings to restart it.", "error"); } return Task.FromResult<object?>(null); }); } catch { source.Dispose(); }
     }
     public void Notify() => Changed?.Invoke();
-    public async Task<Account> AcceptSession(string cookie, string source, CancellationToken cancellation = default)
+    public async Task<Account> AcceptSession(string cookie, string source, CancellationToken cancellation = default, long? expectedUserId = null)
     {
         RequireLive();
         var identified = await Api.Identify(Input.Cookie(cookie));
         cancellation.ThrowIfCancellationRequested();
+        if (expectedUserId is long expected && identified.UserId != expected) throw new InvalidOperationException("This login belongs to a different Roblox account. Choose the correct saved login; the selected account was not changed.");
         Vault.Merge([identified]);
         var stored = Vault.Data.Accounts.Single(a => a.UserId == identified.UserId);
         bool identityChanged = stored.Username != identified.Username || stored.DisplayName != identified.DisplayName;
@@ -61,7 +64,7 @@ public sealed class AppService : IDisposable
     }
     public void Log(string message, string kind = "info")
     {
-        message = Diagnostics.Redact(message, [Vault.Data.Settings.ApiToken, .. Vault.Data.Accounts.Select(a => a.SecurityToken)]);
+        message = Diagnostics.Redact(message, [Vault.Data.Settings.ApiToken, .. Vault.Data.Accounts.Select(a => a.SecurityToken), .. Credentials.Secrets]);
         Activity.Insert(0, new(DateTime.UtcNow, kind, message));
         if (Activity.Count > 200) Activity.RemoveRange(200, Activity.Count - 200);
         if (!IsDemo) activityStore.Queue(Activity.ToArray());
@@ -73,7 +76,8 @@ public sealed class AppService : IDisposable
         games = Vault.Data.Games.OrderByDescending(g => g.Favorite).ThenByDescending(g => g.LastPlayed),
         settings = new { Vault.Data.Settings.MultiInstance, Vault.Data.Settings.LaunchDelay, Vault.Data.Settings.HideUsernames, Vault.Data.Settings.RememberWindows, Vault.Data.Settings.ClosePrevious, Vault.Data.Settings.ApiEnabled, Vault.Data.Settings.ApiPort, Vault.Data.Settings.Accent },
         activity = Activity.ToArray(), demo = IsDemo, version = typeof(AppService).Assembly.GetName().Version?.ToString(3), apiRunning = Server?.IsRunning == true, launching = Launches.IsLaunching,
-        multiInstanceReady = multi?.IsActive == true, multiInstanceError = multiError, backups = Backups.State
+        multiInstanceReady = multi?.IsActive == true, multiInstanceError = multiError, backups = Backups.State,
+        passwords = new { count = Credentials.Count, available = Credentials.Available }
     };
     public Account Find(Guid id) => Vault.Data.Accounts.FirstOrDefault(a => a.Id == id) ?? throw new ArgumentException("Account not found.");
     public async Task<object?> Command(string action, JsonElement p)

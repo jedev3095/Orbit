@@ -50,10 +50,10 @@ public sealed class SignInTests
     public Task BrowserAutomaticallySavesTheValidatedSessionAfterHomeNavigation() => Sta.Run(async () =>
     {
         var vault = NewVault(); using var app = new AppService(vault, api: new RobloxApi(new SignInFixture()));
-        using var browser = new AccountBrowser(app); bool blockInitialNavigation = true;
+        using var browser = new AccountBrowser(app);
         // The profile is new and contains only a synthetic cookie. All browser
         // page requests are cancelled or answered locally, not sent to Roblox.
-        browser.View.CoreWebView2InitializationCompleted += (_, _) => browser.View.CoreWebView2.NavigationStarting += (_, e) => { if (blockInitialNavigation) e.Cancel = true; };
+        browser.View.CoreWebView2InitializationCompleted += (_, _) => browser.View.CoreWebView2.NavigationStarting += (_, e) => { if (!e.Uri.Contains("orbit-test-local=1", StringComparison.Ordinal)) e.Cancel = true; };
         var accepted = new TaskCompletionSource<Guid>(TaskCreationOptions.RunContinuationsAsynchronously); app.AccountAccepted += id => accepted.TrySetResult(id);
         browser.Show(); await browser.Ready.WaitAsync(TimeSpan.FromSeconds(45));
         var core = browser.View.CoreWebView2;
@@ -61,9 +61,38 @@ public sealed class SignInTests
         using var html = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("<!doctype html><title>Synthetic signed-in page</title><p>Test home page</p>"));
         core.AddWebResourceRequestedFilter("https://www.roblox.com/*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
         core.WebResourceRequested += (_, e) => { html.Position = 0; e.Response = core.Environment.CreateWebResourceResponse(html, 200, "OK", "Content-Type: text/html"); };
-        blockInitialNavigation = false; core.Navigate("https://www.roblox.com/home");
+        core.Navigate("https://www.roblox.com/home?orbit-test-local=1");
         Guid id = await accepted.Task.WaitAsync(TimeSpan.FromSeconds(15)); await Task.Delay(50);
         var saved = Assert.Single(vault.Data.Accounts); Assert.Equal(id, saved.Id); Assert.Equal("Offline", saved.Status); Assert.Equal(Cookie, saved.SecurityToken); Assert.True(browser.IsDisposed);
+    });
+
+    [OptionalFact("ORBIT_UI_TESTS")]
+    public Task SavedPasswordFillsAndRefreshesOnlyTheExpectedAccount() => Sta.Run(async () =>
+    {
+        var vault = NewVault(); vault.Merge([new() { UserId = 42, Username = "validated-user", Alias = "Keep this alias", SecurityToken = Cookie }]); var account = vault.Data.Accounts.Single(); account.Status = "Needs login";
+        using var app = new AppService(vault, api: new RobloxApi(new SignInFixture()));
+        var login = new SavedLogin { Username = "validated-user", Password = "quotes\" and comma, plus </script> \\ password" }; app.Credentials.Save(login);
+        using var browser = new AccountBrowser(app, account, refreshSession: true, credentialId: login.Id);
+        browser.View.CoreWebView2InitializationCompleted += (_, _) => browser.View.CoreWebView2.NavigationStarting += (_, e) => { if (!e.Uri.Contains("orbit-test-local=1", StringComparison.Ordinal)) e.Cancel = true; };
+        var accepted = new TaskCompletionSource<Guid>(TaskCreationOptions.RunContinuationsAsynchronously); app.AccountAccepted += id => accepted.TrySetResult(id);
+        browser.Show(); await browser.Ready.WaitAsync(TimeSpan.FromSeconds(20)); var core = browser.View.CoreWebView2;
+        var cookie = core.CookieManager.CreateCookie(".ROBLOSECURITY", Cookie, ".roblox.com", "/"); cookie.IsSecure = true; cookie.IsHttpOnly = true; core.CookieManager.AddOrUpdateCookie(cookie);
+        var streams = new List<MemoryStream>(); int intercepted=0;
+        core.AddWebResourceRequestedFilter("https://www.roblox.com/*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
+        core.WebResourceRequested += (_, e) =>
+        {
+            intercepted++;
+            string html = e.Request.Uri.Contains("/login") ? "<title>Synthetic local login</title><input id='login-username'><input id='login-password' type='password'><button id='login-button' disabled>Log in</button><script>" +
+                "for(const input of document.querySelectorAll('input'))input.addEventListener('input',()=>setTimeout(()=>document.getElementById('login-button').disabled=false,50));" +
+                "window.syntheticClicks=0;document.getElementById('login-button').onclick=()=>{window.syntheticClicks++;if(document.getElementById('login-username').value==='validated-user'&&document.getElementById('login-password').value===" + Json.Write(login.Password) + ")location.href='/home?orbit-test-local=1'};</script>" : "<p>Synthetic signed-in home</p>";
+            var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(html)); streams.Add(stream); e.Response = core.Environment.CreateWebResourceResponse(stream, 200, "OK", "Content-Type: text/html");
+        };
+        core.Navigate("https://www.roblox.com/login?orbit-test-local=1");
+        Guid id = await accepted.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        Assert.True(intercepted >= 2, "Login and home pages must both be intercepted locally.");
+        await Task.Delay(50);
+        Assert.Equal(account.Id, id); Assert.Equal("Offline", account.Status); Assert.Equal("Keep this alias", account.Alias); Assert.Equal(42, app.Credentials.Get(login.Id).LinkedUserId); Assert.True(browser.IsDisposed);
+        foreach (var stream in streams) stream.Dispose();
     });
 
     [OptionalFact("ORBIT_UI_TESTS")]
