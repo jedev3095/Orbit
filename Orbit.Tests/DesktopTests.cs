@@ -32,6 +32,31 @@ internal static class Sta
 public sealed class DesktopTests
 {
     [OptionalFact("ORBIT_UI_TESTS")]
+    public Task AccountTableScrollSurvivesBackgroundUpdatesAndSelection() => Sta.Run(async () =>
+    {
+        var vault = new Vault(Path.Combine(Path.GetTempPath(), "Orbit.Tests", Guid.NewGuid().ToString("N")));
+        using var app = new AppService(vault, true); TestSeed.Fill(app);
+        for (int i = 0; i < 120; i++) vault.Data.Accounts.Add(new() { Username = $"scroll-account-{i:000}", DisplayName = $"Scroll account {i:000}", UserId = 10000 + i, Group = $"Group {i:000}" });
+        using var window = new MainWindow(app) { Size = new(880, 560) }; window.Show();
+        await window.Ready.WaitAsync(TimeSpan.FromSeconds(20)); await Task.Delay(300);
+        var core = window.View.CoreWebView2;
+        await core.ExecuteScriptAsync("document.querySelector('#search').focus({preventScroll:true});document.querySelector('.table-wrap').scrollTop=1700;document.querySelector('.account-controls').scrollTop=300");
+        for (int i = 0; i < 3; i++)
+        {
+            app.Notify(); await Task.Delay(80);
+            string positions = await core.ExecuteScriptAsync("({table:document.querySelector('.table-wrap').scrollTop,sidebar:document.querySelector('.account-controls').scrollTop})");
+            using var values = JsonDocument.Parse(positions);
+            Assert.Equal(1700, values.RootElement.GetProperty("table").GetDouble()); Assert.Equal(300, values.RootElement.GetProperty("sidebar").GetDouble());
+        }
+        await core.ExecuteScriptAsync("document.querySelectorAll('[data-select]')[45].click()");
+        Assert.Equal("1700", await core.ExecuteScriptAsync("document.querySelector('.table-wrap').scrollTop"));
+        await core.ExecuteScriptAsync("document.querySelector('#search').value='scroll-account-0';document.querySelector('#search').dispatchEvent(new Event('input',{bubbles:true}))");
+        Assert.Equal("0", await core.ExecuteScriptAsync("document.querySelector('.table-wrap').scrollTop"));
+        Assert.Equal("300", await core.ExecuteScriptAsync("document.querySelector('.account-controls').scrollTop"));
+        window.Close();
+    });
+
+    [OptionalFact("ORBIT_UI_TESTS")]
     public Task DashboardInNativeWebView() => Sta.Run(async () =>
     {
         string output = Path.Combine(AppContext.BaseDirectory, "TestResults", "ui"); Directory.CreateDirectory(output);

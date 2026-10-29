@@ -1,4 +1,10 @@
-# Current verification (0.2.2)
+# Current verification (0.2.3)
+
+29 October 2026. Fixed account-table scrolling jumping to the top when background state notifications rebuilt the dashboard. Render now captures and restores table, sidebar and page scroll offsets after restoring focus, using preventScroll when focusing inputs. Table position resets when the user changes the account search, group or sorting; sidebar position remains stable within the same page.
+
+Native WebView regression coverage uses 127 synthetic accounts and enough groups to scroll both panes. It verifies exact table/sidebar positions across three native state notifications, preserves table position when selecting an account, and verifies an intentional table reset on search changes without resetting the sidebar. The full local test run passed 33 xUnit cases, including the existing 42-condition UI suite at normal and narrow widths. Live launch and public search integration tests were skipped because this change is limited to dashboard rendering.
+
+# Verification (0.2.2)
 
 The embedded add-account browser now validates and saves automatically on the signed-in Roblox home page, while retaining the manual Use this account fallback. It waits for browser cookies, tries distinct session candidates only for rejected sessions, avoids repeated automatic attempts for unchanged cookies, and cancels saving if the window is closed. Failures are displayed in a larger banner and logged with candidate-session redaction.
 

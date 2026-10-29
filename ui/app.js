@@ -6,6 +6,7 @@ const pending = new Map(); let sequence = 0;
 let state = {accounts:[],games:[],settings:{},activity:[]}, page = 'accounts', group = '', query = '', sort = 'name', selected = new Set();
 let launch = {placeId:'', userId:'', jobId:'', mode:'game'}, busy = false;
 let placeBrowser={draft:'',query:'',games:[],next:'',session:'',searched:false,loading:false,error:''};
+let renderedPage=null,renderedTableView=null;
 const bridge = window.chrome?.webview;
 function call(action,payload={}) {
   if (!bridge) return Promise.reject(Error('Open Orbit.exe to use this desktop interface.'));
@@ -35,6 +36,11 @@ function ago(value){if(!value)return'Never';const n=Math.max(0,(Date.now()-new D
 function visible(){return state.accounts.filter(a=>(!group||a.group===group)&&[a.username,a.displayName,a.alias,a.group].some(v=>String(v).toLowerCase().includes(query.toLowerCase()))).sort((a,b)=>sort==='recent'?new Date(b.lastUse||0)-new Date(a.lastUse||0):sort==='balance'?(b.robux||0)-(a.robux||0):a.username.localeCompare(b.username));}
 function render(){
   const focus=document.activeElement?.id, start=document.activeElement?.selectionStart, end=document.activeElement?.selectionEnd;
+  const tableView=JSON.stringify([group,query,sort]);
+  const scrollPositions=['#main','.account-controls','.table-wrap'].map(selector=>{
+    const element=renderedPage===page&&(selector!=='.table-wrap'||renderedTableView===tableView)?$(selector):null;
+    return {selector,top:element?.scrollTop??0,left:element?.scrollLeft??0};
+  });
   const navs=[['accounts','Accounts'],['games','Places'],['control','Account control'],['activity','Activity'],['settings','Settings']];
   $('#nav').innerHTML=navs.map(([id,title])=>`<button class="nav-item ${page===id?'active':''}" data-page="${id}" aria-pressed="${page===id}">${title}</button>`).join('');
   $('#preview-badge').hidden=!state.demo;
@@ -43,7 +49,9 @@ function render(){
   document.body.classList.toggle('violet',state.settings.accent==='violet');
   $('#main').classList.toggle('accounts-view',page==='accounts');
   $('#main').innerHTML=({accounts:accountsPage,games:gamesPage,control:controlPage,activity:activityPage,settings:settingsPage}[page]||accountsPage)();
-  if(focus){const input=document.getElementById(focus);if(input){input.focus();if(typeof start==='number'&&input.setSelectionRange&&input.type!=='number')input.setSelectionRange(start,end??start);}}
+  if(focus){const input=document.getElementById(focus);if(input){input.focus({preventScroll:true});if(typeof start==='number'&&input.setSelectionRange&&input.type!=='number')input.setSelectionRange(start,end??start);}}
+  for(const {selector,top,left} of scrollPositions){const element=$(selector);if(element){element.scrollTop=top;element.scrollLeft=left;}}
+  renderedPage=page;renderedTableView=tableView;
 }
 function accountsPage(){
   const rows=visible(), groups=[...new Set(state.accounts.map(a=>a.group))].sort();
