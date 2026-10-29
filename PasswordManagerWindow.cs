@@ -34,8 +34,8 @@ public sealed class PasswordManagerWindow : Form
     private readonly Label summary = new() { Dock = DockStyle.Top, Height = 60, Padding = new(12) };
     public PasswordManagerWindow(CredentialVault store, Action<Guid>? use = null, Account? target = null)
     {
-        this.store = store; this.use = use; PasswordUi.Theme(this); Text = "Local password manager — Orbit"; Size = new(850, 590); MinimumSize = new(680, 440);
-        grid.Columns.Add("name", "Name"); grid.Columns.Add("username", "Username / email"); grid.Columns.Add("website", "Website");
+        this.store = store; this.use = use; PasswordUi.Theme(this); Text = target is null ? "Local password manager — Orbit" : $"Refresh @{target.Username} — saved logins"; Size = new(850, 590); MinimumSize = new(680, 440);
+        grid.Columns.Add("name", "Name"); grid.Columns.Add("username", "Username / email"); grid.Columns.Add("website", "Website"); grid.Columns.Add("added", "Added");
         var controls = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new(8) };
         controls.Controls.AddRange([search, PasswordUi.Button("Add login", Add), PasswordUi.Button("Edit", Edit), PasswordUi.Button("Delete", Delete), PasswordUi.Button("Import CSV", ImportCsv), PasswordUi.Button("Encrypted export", Export), PasswordUi.Button("Restore export", Restore), PasswordUi.Button("Recover previous", Recover)]);
         if (use is not null) controls.Controls.Add(PasswordUi.Button("Fill & sign in", Use));
@@ -52,8 +52,8 @@ public sealed class PasswordManagerWindow : Form
     private void Populate()
     {
         grid.Rows.Clear();
-        foreach (var entry in store.List().Where(e => (e.Name + " " + e.Username).Contains(search.Text, StringComparison.OrdinalIgnoreCase)).OrderBy(e => e.Name).ThenBy(e => e.Username))
-            grid.Rows[grid.Rows.Add(entry.Name, entry.Username, entry.Website)].Tag = entry.Id;
+        foreach (var entry in store.List().Where(e => (e.Name + " " + e.Username).Contains(search.Text, StringComparison.OrdinalIgnoreCase)).OrderBy(e => e.Name).ThenBy(e => e.Username).ThenByDescending(e => e.AddedUtc))
+            grid.Rows[grid.Rows.Add(entry.Name, entry.Username, entry.Website, entry.AddedUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "Existing login")].Tag = entry.Id;
         summary.Text = store.Available ? $"{store.Count} Roblox logins · Encrypted for this Windows user. No cloud sign-in. Passwords are used only on Roblox’s login page.\nUse encrypted export to back up or move these logins; account exports are separate." : "This password vault could not be decrypted. The file is preserved. Try Recover previous, or use the original Windows user account.";
     }
     private Guid? Selected => grid.CurrentRow?.Tag is Guid id ? id : null;
@@ -68,8 +68,8 @@ public sealed class PasswordManagerWindow : Form
         if (picker.ShowDialog(this) != DialogResult.OK) return;
         if (new FileInfo(picker.FileName).Length > 8 * 1024 * 1024) throw new InvalidDataException();
         var plan = CredentialCsv.Read(File.ReadAllText(picker.FileName, new System.Text.UTF8Encoding(false, true)));
-        using var preview = new CredentialImportPreview(plan); if (preview.ShowDialog(this) != DialogResult.OK) return;
-        int added = store.Import(plan.Logins); MessageBox.Show(this, $"Imported {added} logins. Existing usernames were kept unchanged.\n\nOrbit encrypted its copy. The original CSV is still plaintext and has not been changed.", "Import complete");
+        using var preview = new CredentialImportPreview(plan, store); if (preview.ShowDialog(this) != DialogResult.OK) return;
+        int added = store.Import(preview.SelectedLogins); MessageBox.Show(this, $"Imported {added} logins. Only exact named-login duplicates were skipped. Different passwords and entry names were kept separately; existing passwords were not overwritten.\n\nOrbit encrypted its copy. The original CSV is still plaintext and has not been changed.", "Import complete");
     });
     private void Export() => Guard(() =>
     {
@@ -83,7 +83,7 @@ public sealed class PasswordManagerWindow : Form
         if (new FileInfo(picker.FileName).Length > 32 * 1024 * 1024) throw new InvalidDataException();
         string? password = PasswordUi.Password(this, "Unlock password export", false); if (password is null) return;
         var imported = CredentialVault.DecodeExport(File.ReadAllBytes(picker.FileName), password);
-        using var preview = new CredentialImportPreview(new(imported, 0)); if (preview.ShowDialog(this) == DialogResult.OK) store.Import(imported, preserveLinks: true);
+        using var preview = new CredentialImportPreview(new(imported, 0), store, preserveLinks: true); if (preview.ShowDialog(this) == DialogResult.OK) store.Import(preview.SelectedLogins, preserveLinks: true);
     });
     private void Recover() { if (MessageBox.Show(this, "Restore the previous encrypted local password vault? The current file will be preserved.", "Recover passwords", MessageBoxButtons.YesNo) == DialogResult.Yes) Guard(store.RestorePrevious); }
 }
@@ -106,14 +106,33 @@ internal sealed class LoginEditor : Form
 
 internal sealed class CredentialImportPreview : Form
 {
-    public CredentialImportPreview(CredentialImportPlan plan)
+    private readonly DataGridView grid = PasswordUi.Grid();
+    public List<SavedLogin> SelectedLogins
     {
-        PasswordUi.Theme(this); Text = "Review password import"; Size = new(760, 460);
-        var grid = PasswordUi.Grid(); grid.Columns.Add("name", "Name"); grid.Columns.Add("username", "Username / email"); grid.Columns.Add("website", "Website");
-        foreach (var entry in plan.Logins) grid.Rows.Add(entry.Name, entry.Username, entry.Website);
-        var message = new Label { Dock = DockStyle.Top, Height = 96, Padding = new(12), Text = $"{plan.Logins.Count} Roblox logins ready; {plan.Skipped} unrelated, empty or unsupported rows skipped. Existing usernames will not be overwritten.\nOnly Roblox usernames and passwords are imported; notes, passkeys and TOTP are not imported. Passwords are hidden. Plain CSV originals remain unencrypted and unchanged." };
+        get { grid.EndEdit(); return grid.Rows.Cast<DataGridViewRow>().Where(r => r.Cells[0].Value is true && r.Tag is SavedLogin).Select(r => (SavedLogin)r.Tag!).ToList(); }
+    }
+    public CredentialImportPreview(CredentialImportPlan plan, CredentialVault? store = null, bool preserveLinks = false)
+    {
+        PasswordUi.Theme(this); Text = "Review password import"; Size = new(1000, 570); MinimumSize = new(760, 440);
+        grid.ReadOnly = false; grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "include", HeaderText = "Import", FillWeight = 45 });
+        foreach (var (key, title) in new[] { ("row", "CSV record"), ("name", "Name"), ("username", "Username / email"), ("website", "Website"), ("status", "Import status / reason") }) { int index = grid.Columns.Add(key, title); grid.Columns[index].ReadOnly = true; }
+        grid.Columns["row"].FillWeight = 55; grid.Columns["status"].FillWeight = 180;
+        var rows = plan.Rows ?? plan.Logins.Select((entry, i) => new CredentialImportRow(i + 1, entry, entry.Name, entry.Username, "roblox.com", "Login", true, true)).ToList();
+        var seen = store?.List().ToList() ?? [];
+        foreach (var item in rows)
+        {
+            bool duplicate = item.Login is not null && seen.Any(e => CredentialVault.SameImportedLogin(e, item.Login) && (!preserveLinks || item.Login.LinkedUserId is null || e.LinkedUserId == item.Login.LinkedUserId));
+            string status = duplicate ? "Exact duplicate (skipped)" : item.Selected && item.Login is not null ? store?.ImportDescription(item.Login) ?? item.Reason : item.Reason;
+            int index = grid.Rows.Add(item.Selected && !duplicate, item.Number, item.Name, item.Username, item.Website, status);
+            var row = grid.Rows[index]; row.Tag = item.Login; row.Cells[0].ReadOnly = !item.CanSelect || duplicate;
+            if (item.Login is not null && item.Selected && !duplicate) seen.Add(item.Login);
+        }
+        var message = new Label { Dock = DockStyle.Top, Height = 105, Padding = new(12), Text = $"{rows.Count} records reviewed; {plan.Logins.Count} matched Roblox automatically. Every excluded record has a reason below.\nNo-website login rows are unchecked: tick one only if you know it belongs to Roblox. Different passwords/names stay separate; existing passwords are never overwritten.\nPasswords are hidden. Notes, passkeys and TOTP are not imported. CSV originals remain plaintext and unchanged." };
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 46, FlowDirection = FlowDirection.RightToLeft };
-        var import = PasswordUi.Button("Import encrypted", () => DialogResult = DialogResult.OK); import.Enabled = plan.Logins.Count > 0; buttons.Controls.Add(import); buttons.Controls.Add(PasswordUi.Button("Cancel", () => Close()));
-        Controls.Add(grid); Controls.Add(message); Controls.Add(buttons);
+        var import = PasswordUi.Button("Import selected encrypted", () => DialogResult = DialogResult.OK); buttons.Controls.Add(import); buttons.Controls.Add(PasswordUi.Button("Cancel", () => Close()));
+        void UpdateButton() => import.Enabled = SelectedLogins.Count > 0;
+        grid.CurrentCellDirtyStateChanged += (_, _) => { if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit); };
+        grid.CellValueChanged += (_, _) => UpdateButton();
+        Controls.Add(grid); Controls.Add(message); Controls.Add(buttons); UpdateButton();
     }
 }

@@ -1,4 +1,12 @@
-# Current verification (0.3.0)
+# Current verification (0.3.1)
+
+29 October 2026. Audited the Bitwarden CSV importer and fixed three confirmed defects: username-only deduplication discarded distinct logins, the previous CSV reader removed blank lines inside quoted fields, and comma-separated Bitwarden URI arrays could hide Roblox entries. Replaced the reader with strict, bounded CSV parsing that preserves password characters and newline sequences exactly. Canonical Bitwarden headers take precedence over generic aliases; malformed records fail before storage changes.
+
+The native preview now shows every record with a reason, allows explicit selection of no-website candidates, and skips only exact named-login duplicates. Different names or passwords remain separate. Ambiguous saved-login lookup opens the picker, with added/verified timestamps governing a previously verified choice. Password redaction handles overlapping variants longest first.
+
+Validation: 68 xUnit cases passed with native UI tests enabled; two opt-in live launch/public search cases were skipped. Coverage includes 150 deterministic randomized quoted passwords, exact whitespace/Unicode/CR/LF/CRLF and blank-line round trips, parse-to-encrypted-store reload, shared usernames and password variants, header and URI handling, rejection before writes, per-row preview reasons and manual selection. Native preview rendering was inspected using synthetic data. Build completed with zero warnings and errors. No actual exported credential CSV was read, and no real account password was tested. Existing stored entries are not automatically repaired; re-import the original CSV and review variants.
+
+# Verification (0.3.0)
 
 29 October 2026. Replaced embedded Bitwarden integration with an opt-in local Roblox password manager, separate DPAPI CurrentUser password storage, CSV previews/import, encrypted portable password exports, and saved-login session refresh. No real credential CSV was imported during development. Browser extensions are disabled in the new profiles; old extension profiles were not deleted.
 

@@ -11,6 +11,8 @@ public sealed record SavedLogin
     public string Username { get; init; } = "";
     public string Password { get; init; } = "";
     public long? LinkedUserId { get; init; }
+    public DateTime? AddedUtc { get; init; }
+    public DateTime? VerifiedUtc { get; init; }
 }
 
 public sealed class CredentialVault
@@ -68,25 +70,50 @@ public sealed class CredentialVault
     }
     public IReadOnlyList<SavedLogin> List() => entries.ToArray();
     public SavedLogin Get(Guid id) => entries.SingleOrDefault(e => e.Id == id) ?? throw new ArgumentException("Saved login not found.");
-    public SavedLogin? ForAccount(Account account) => entries.FirstOrDefault(e => e.LinkedUserId == account.UserId) ?? entries.FirstOrDefault(e => e.Username.Equals(account.Username, StringComparison.OrdinalIgnoreCase));
-    public void Save(SavedLogin entry) => Write(entries.Where(e => e.Id != entry.Id).Append(entry).ToList());
+    public SavedLogin? ForAccount(Account account)
+    {
+        var linked = entries.Where(e => e.LinkedUserId == account.UserId).ToList();
+        if (linked.Count == 1)
+        {
+            var selected = linked[0];
+            bool newConflict = entries.Any(e => e.Id != selected.Id && (e.LinkedUserId is null || e.LinkedUserId == account.UserId) && e.Username.Equals(selected.Username, StringComparison.OrdinalIgnoreCase) && e.Password != selected.Password && (selected.VerifiedUtc is null || e.AddedUtc is null || e.AddedUtc > selected.VerifiedUtc));
+            return newConflict ? null : selected;
+        }
+        if (linked.Count > 1) return null;
+        var matches = entries.Where(e => e.Username.Equals(account.Username, StringComparison.OrdinalIgnoreCase) && (e.LinkedUserId is null || e.LinkedUserId == account.UserId)).ToList();
+        return matches.Count == 1 ? matches[0] : null;
+    }
+    public void Save(SavedLogin entry)
+    {
+        var existing = entries.FirstOrDefault(e => e.Id == entry.Id);
+        entry = entry with { AddedUtc = existing?.AddedUtc ?? entry.AddedUtc ?? DateTime.UtcNow, VerifiedUtc = existing is not null && (existing.Password != entry.Password || !existing.Username.Equals(entry.Username, StringComparison.OrdinalIgnoreCase)) ? null : entry.VerifiedUtc };
+        Write(entries.Where(e => e.Id != entry.Id).Append(entry).ToList());
+    }
     public void Delete(Guid id) => Write(entries.Where(e => e.Id != id).ToList());
     public int Import(IEnumerable<SavedLogin> imported, bool preserveLinks = false)
     {
         var incoming = Validate(imported); var next = entries.ToList(); int added = 0;
         foreach (var entry in incoming)
         {
-            // Import is additive: existing passwords are never silently replaced.
-            if (next.Any(e => e.Username.Equals(entry.Username, StringComparison.OrdinalIgnoreCase))) continue;
-            next.Add(entry with { Id = Guid.NewGuid(), LinkedUserId = preserveLinks ? entry.LinkedUserId : null }); added++;
+            // Only exact named-login duplicates are skipped. Shared emails and
+            // changed passwords remain separate entries for explicit selection.
+            if (next.Any(e => SameImportedLogin(e, entry) && (!preserveLinks || entry.LinkedUserId is null || e.LinkedUserId == entry.LinkedUserId))) continue;
+            next.Add(entry with { Id = Guid.NewGuid(), LinkedUserId = preserveLinks ? entry.LinkedUserId : null, AddedUtc = DateTime.UtcNow, VerifiedUtc = null }); added++;
         }
         Write(next); return added;
+    }
+    internal static bool SameImportedLogin(SavedLogin left, SavedLogin right) => left.Username.Equals(right.Username, StringComparison.OrdinalIgnoreCase) && left.Password.Equals(right.Password, StringComparison.Ordinal) && left.Name.Equals(right.Name, StringComparison.Ordinal);
+    internal string ImportDescription(SavedLogin entry)
+    {
+        if (entries.Any(e => SameImportedLogin(e, entry))) return "Exact duplicate already saved";
+        return entries.Any(e => e.Username.Equals(entry.Username, StringComparison.OrdinalIgnoreCase)) ? "Same username/email: keep as separate login" : "New login";
     }
     public void Link(Guid id, long userId)
     {
         var entry = Get(id);
         if (entry.LinkedUserId is not null && entry.LinkedUserId != userId) return;
-        if (entry.LinkedUserId != userId) Save(entry with { LinkedUserId = userId });
+        var next = entries.Select(e => e.Id == id ? e with { LinkedUserId = userId, VerifiedUtc = DateTime.UtcNow } : e.LinkedUserId == userId ? e with { LinkedUserId = null } : e).ToList();
+        Write(next);
     }
     public void RestorePrevious()
     {

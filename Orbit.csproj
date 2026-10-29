@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>Orbit</AssemblyName>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <ApplicationIcon>assets\orbit.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>

@@ -79,7 +79,7 @@ public static class Diagnostics
 {
     public static string Redact(string message, params string[] secrets)
     {
-        foreach (var secret in secrets.Where(s => !string.IsNullOrEmpty(s))) message = message.Replace(secret, "[redacted]", StringComparison.Ordinal);
+        foreach (var secret in secrets.Where(s => !string.IsNullOrEmpty(s)).OrderByDescending(s => s.Length)) message = message.Replace(secret, "[redacted]", StringComparison.Ordinal);
         return message.Length > 3000 ? message[..3000] : message;
     }
 }

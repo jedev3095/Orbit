@@ -38,10 +38,10 @@ public sealed class CredentialTests
     [Fact] public void ImportsDoNotReplaceExistingPasswordsAndAreAtomicForInvalidRows()
     {
         var store = new CredentialVault(Temp()); var login = Login(); store.Save(login);
-        Assert.Equal(1, store.Import([login with { Password = "another-password" }, Login("new-user")])); Assert.Equal(login.Password, store.Get(login.Id).Password);
+        Assert.Equal(2, store.Import([login with { Password = "another-password" }, Login("new-user")])); Assert.Equal(login.Password, store.Get(login.Id).Password);
         byte[] before = File.ReadAllBytes(store.FilePath);
         Assert.Throws<InvalidDataException>(() => store.Import([Login("valid-new"), Login("invalid") with { Website = "https://roblox.com.attacker.invalid" }]));
-        Assert.Equal(before, File.ReadAllBytes(store.FilePath)); Assert.Equal(2, store.Count);
+        Assert.Equal(before, File.ReadAllBytes(store.FilePath)); Assert.Equal(3, store.Count);
     }
     [Theory]
     [InlineData("https://www.roblox.com/login", true)]
@@ -102,7 +102,7 @@ public sealed class CredentialTests
         var store = new CredentialVault(Temp()); var entry = Login(); store.Save(entry);
         using var window = new PasswordManagerWindow(store); window.Show(); await Task.Delay(150);
         var grid = Assert.Single(window.Controls.OfType<DataGridView>());
-        Assert.Equal(3, grid.Columns.Count); Assert.DoesNotContain(grid.Rows.Cast<DataGridViewRow>().SelectMany(row => row.Cells.Cast<DataGridViewCell>()), cell => Equals(cell.Value, entry.Password));
+        Assert.Equal(4, grid.Columns.Count); Assert.DoesNotContain(grid.Rows.Cast<DataGridViewRow>().SelectMany(row => row.Cells.Cast<DataGridViewCell>()), cell => Equals(cell.Value, entry.Password));
         string folder = Path.Combine(AppContext.BaseDirectory, "TestResults", "passwords"); Directory.CreateDirectory(folder);
         using var image = new System.Drawing.Bitmap(window.Width, window.Height); window.DrawToBitmap(image, new System.Drawing.Rectangle(0, 0, window.Width, window.Height)); image.Save(Path.Combine(folder, "manager.png"));
         window.Close();
