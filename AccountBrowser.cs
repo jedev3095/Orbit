@@ -18,13 +18,15 @@ public sealed class AccountBrowser : Form
     private bool capturing, saved, autoScheduled;
     private readonly CancellationTokenSource lifetime = new();
     private readonly HashSet<string> automaticAttempts = [];
+    private readonly TaskCompletionSource<bool> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    internal Task<bool> Completion => completion.Task;
     private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal Task Ready => ready.Task;
     internal WebView2 View => view;
     private CoreWebView2Environment? environment;
     public bool IsSignIn => account is null || refreshSession;
     public Guid? AccountId => account?.Id;
-    public AccountBrowser(AppService app, Account? account = null, bool refreshSession = false, Guid? credentialId = null)
+    public AccountBrowser(AppService app, Account? account = null, bool refreshSession = false, Guid? credentialId = null, bool queuedRefresh = false)
     {
         this.app = app; this.account = account; this.refreshSession = refreshSession; this.credentialId = credentialId;
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -34,10 +36,19 @@ public sealed class AccountBrowser : Form
         var back = new ToolStripButton("←"); back.Click += (_, _) => { if (view.CanGoBack) view.GoBack(); };
         var refresh = new ToolStripButton("Reload"); refresh.Click += (_, _) => view.Reload();
         savedLogins.Click += (_, _) => new PasswordManagerWindow(app.Credentials, id => _ = SelectSavedLogin(id), account).Show(this);
-        toolbar.Items.AddRange([back, refresh, new ToolStripSeparator(), savedLogins, new ToolStripSeparator(), capture, new ToolStripSeparator(), status]);
+        toolbar.Items.AddRange([back, refresh, new ToolStripSeparator()]);
+        if (queuedRefresh)
+        {
+            var skip = new ToolStripButton("Skip account"); skip.Click += (_, _) => app.SessionRefresh.SkipCurrent();
+            var stop = new ToolStripButton("Stop queue"); stop.Click += (_, _) => app.SessionRefresh.Stop();
+            toolbar.Items.AddRange([skip, stop, new ToolStripSeparator()]);
+            Text = $"@{account?.Username} — Refresh expired accounts";
+        }
+        toolbar.Items.AddRange([savedLogins, new ToolStripSeparator(), capture, new ToolStripSeparator(), status]);
         Controls.Add(view); Controls.Add(detail); Controls.Add(toolbar); capture.Click += async (_, _) => await CaptureAccount();
         Load += async (_, _) => await Initialize();
         FormClosing += (_, _) => lifetime.Cancel();
+        FormClosed += (_, _) => completion.TrySetResult(saved);
     }
     private static bool Roblox(string uri) => Uri.TryCreate(uri, UriKind.Absolute, out var u) && u.Scheme == "https" && (u.Host == "roblox.com" || u.Host.EndsWith(".roblox.com", StringComparison.OrdinalIgnoreCase));
     private async Task Initialize()

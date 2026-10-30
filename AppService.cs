@@ -24,6 +24,7 @@ public sealed class AppService : IDisposable
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 5000 };
     public LaunchService Launches { get; }
     public ScheduledBackups Backups { get; }
+    public SessionRefreshService SessionRefresh { get; }
     private readonly AccountTools tools;
     private readonly ActivityStore activityStore;
     public AppService(Vault vault, bool demo = false, RobloxApi? api = null, Func<MultiInstanceGuard>? multiFactory = null)
@@ -38,6 +39,7 @@ public sealed class AppService : IDisposable
         tools = new AccountTools(Api, Log);
         Launches = new LaunchService(this);
         Backups = new ScheduledBackups(this);
+        SessionRefresh = new SessionRefreshService(this);
         timer.Tick += async (_, _) => await Watch(); timer.Start();
     }
     public Task FlushActivityAsync() => activityStore.FlushAsync();
@@ -77,6 +79,7 @@ public sealed class AppService : IDisposable
         settings = new { Vault.Data.Settings.MultiInstance, Vault.Data.Settings.LaunchDelay, Vault.Data.Settings.HideUsernames, Vault.Data.Settings.RememberWindows, Vault.Data.Settings.ClosePrevious, Vault.Data.Settings.ApiEnabled, Vault.Data.Settings.ApiPort, Vault.Data.Settings.Accent },
         activity = Activity.ToArray(), demo = IsDemo, version = typeof(AppService).Assembly.GetName().Version?.ToString(3), apiRunning = Server?.IsRunning == true, launching = Launches.IsLaunching,
         multiInstanceReady = multi?.IsActive == true, multiInstanceError = multiError, backups = Backups.State,
+        sessionRefresh = SessionRefresh.State,
         passwords = new { count = Credentials.Count, available = Credentials.Available }
     };
     public Account Find(Guid id) => Vault.Data.Accounts.FirstOrDefault(a => a.Id == id) ?? throw new ArgumentException("Account not found.");
@@ -181,5 +184,5 @@ public sealed class AppService : IDisposable
     public static bool IsRunning(Account account) => ProcessTracker.IsRunning(account);
     private void Stop(Account account) => Launches.Stop(account);
     private Task Watch() { if (!IsDemo) { Launches.Watch(); Backups.Tick(); } return Task.CompletedTask; }
-    public void Dispose() { if (disposed) return; disposed = true; lifetime.Cancel(); timer.Stop(); timer.Dispose(); Launches.Dispose(); Backups.Dispose(); Server?.Dispose(); multi?.Dispose(); activityStore.Dispose(); Api.Dispose(); }
+    public void Dispose() { if (disposed) return; disposed = true; lifetime.Cancel(); timer.Stop(); timer.Dispose(); SessionRefresh.Dispose(); Launches.Dispose(); Backups.Dispose(); Server?.Dispose(); multi?.Dispose(); activityStore.Dispose(); Api.Dispose(); }
 }

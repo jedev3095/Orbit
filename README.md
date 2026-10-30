@@ -19,6 +19,10 @@ Select exactly one account and choose **Open browser** above the table to browse
 
 Game launching still uses `.ROBLOSECURITY`. Passwords deliberately saved in the new local password manager live in a separate encrypted store; saved passwords found in original RAM account imports can be reviewed and copied into that separate store. Passwords are never added to session records or the local API.
 
+**Accounts → Refresh expired accounts** checks saved sessions across all accounts, regardless of the current selection or filter. Expired sessions with a single matching saved login are refreshed one at a time through the Roblox browser: Orbit fills the login form once, validates the resulting account ID and saves the new session before moving on. Valid sessions are left signed in; missing or ambiguous saved logins are skipped for manual review.
+
+Complete CAPTCHA or two-step verification in the browser when prompted. **Skip account** and **Stop queue** are available in the browser, with **Skip current** and **Stop** also on the dashboard. Closing a queued browser skips that account. Each account has a five-minute limit, and a rate-limited session check stops the batch. There are no automatic password retries. Progress shows valid, refreshed, skipped and failed counts. Session refresh does not launch game clients.
+
 ## Local password manager
 
 Open **Settings → Password manager / CSV import**, or **Add account → Saved local login**. This manager is scoped to Roblox logins. Add, edit or delete entries locally; passwords are masked and never included in the dashboard state or local API. There is no cloud account, telemetry upload or separate master-password unlock.

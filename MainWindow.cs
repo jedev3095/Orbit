@@ -33,7 +33,7 @@ public sealed class MainWindow : Form
         app.Changed += Push;
         app.AccountAccepted += FocusAcceptedAccount;
         Load += async (_, _) => await Initialize();
-        FormClosing += (_, _) => { closing = true; app.Changed -= Push; app.AccountAccepted -= FocusAcceptedAccount; app.Vault.Save(); };
+        FormClosing += (_, _) => { closing = true; app.SessionRefresh.Stop(); app.Changed -= Push; app.AccountAccepted -= FocusAcceptedAccount; app.Vault.Save(); };
     }
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
     private async Task Initialize()
@@ -82,6 +82,11 @@ public sealed class MainWindow : Form
             object? result;
             switch (action)
             {
+                case "refreshExpired":
+                    if (!app.IsDemo) app.SessionRefresh.Start(RefreshInBrowser);
+                    result = null; break;
+                case "skipSessionRefresh": app.SessionRefresh.SkipCurrent(); result = null; break;
+                case "stopSessionRefresh": app.SessionRefresh.Stop(); result = null; break;
                 case "manageLogins":
                     if (!app.IsDemo) new PasswordManagerWindow(app.Credentials, id => OpenSavedLogin(id)).Show(this);
                     result = null; break;
@@ -146,11 +151,31 @@ public sealed class MainWindow : Form
         }
     }
     private void Reply(object result) { if (!closing && Input.TrustedOrigin(view.Source?.AbsoluteUri ?? "")) view.CoreWebView2.PostWebMessageAsJson(Json.Write(result)); }
-    private void FocusAcceptedAccount(Guid id) => Reply(new { type = "accountAccepted", id });
+    private void FocusAcceptedAccount(Guid id) { if (!app.SessionRefresh.IsRunning) Reply(new { type = "accountAccepted", id }); }
+    private async Task<bool> RefreshInBrowser(Account account, SavedLogin login, CancellationToken cancellation)
+    {
+        if (Application.OpenForms.OfType<AccountBrowser>().Any(b => b.IsSignIn && b.AccountId == account.Id))
+        {
+            app.Log($"Skipped queue sign-in for @{account.Username}: its sign-in window is already open.", "warning"); return false;
+        }
+        using var browser = new AccountBrowser(app, account, refreshSession: true, credentialId: login.Id, queuedRefresh: true);
+        using var registration = cancellation.Register(() =>
+        {
+            try { if (!browser.IsDisposed && browser.IsHandleCreated) browser.BeginInvoke(() => { if (!browser.IsDisposed) browser.Close(); }); }
+            catch (InvalidOperationException) { }
+        });
+        cancellation.ThrowIfCancellationRequested(); browser.Show(this);
+        try { return await browser.Completion.WaitAsync(cancellation); }
+        finally { if (!browser.IsDisposed) browser.Close(); }
+    }
     private void OpenSavedLogin(Guid id, Account? target = null)
     {
         var existing = Application.OpenForms.OfType<AccountBrowser>().FirstOrDefault(b => b.IsSignIn && b.AccountId == target?.Id);
-        if (existing is not null) { existing.Close(); }
+        if (existing is not null)
+        {
+            if (app.SessionRefresh.IsRunning && app.SessionRefresh.CurrentAccountId == target?.Id) { existing.Activate(); return; }
+            existing.Close();
+        }
         new AccountBrowser(app, target, refreshSession: target is not null, credentialId: id).Show(this);
     }
     private object? Import(JsonElement p)

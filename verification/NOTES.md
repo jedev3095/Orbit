@@ -1,4 +1,10 @@
-# Current verification (0.3.3)
+# Current verification (0.3.4)
+
+30 October 2026. Added Accounts → Refresh expired accounts. The native queue checks sessions, refreshes only expired/mismatched sessions with an unambiguous saved login, and opens one sign-in browser at a time. It uses the existing restricted autofill and expected-user-ID session validation. The dashboard exposes counts and progress only; credentials remain native. Missing/ambiguous credentials are skipped, a browser close skips its account, five-minute cancellation advances the queue, and session-check rate limiting stops it. Skip/Stop controls are available in both the browser and dashboard. Batch acceptance does not reset account selection or filters.
+
+Validation: 92 tests passed with native UI enabled, with two opt-in live integrations skipped. The ten queue cases cover healthy/expired/mismatched sessions, missing/ambiguous/wrong-account credentials, serial processing, duplicate start rejection, cancellation/skip/timeout, no password retries, transient failures, rate limiting, deleted accounts and metadata redaction. Native tests exercise dashboard start/progress/skip controls, actual browser skip controls, and two complete autofill-to-validated-session flows with only synthetic credentials and locally intercepted pages. They verify one browser at a time, saved account identities, password linkage and cancellation without saving. The queue suite was re-run after final browser controls and count handling changes. Native rendering was inspected. No live account passwords were submitted and no game clients were launched for this feature.
+
+# Verification (0.3.3)
 
 29 October 2026. RAM account imports now extract nonempty saved Password fields into a separate native password review, then store selected logins in CredentialVault with their original account ID association. Password strings preserve their original characters. Session records remain free of password properties. Re-import works for existing account-table entries; exact named-login duplicates stay unchanged and distinct variants remain separate. The completion dialog and Activity report account/password counts separately. Ordinary Orbit account backups still exclude the separate password store.
 
