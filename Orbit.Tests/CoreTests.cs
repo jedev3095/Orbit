@@ -47,7 +47,7 @@ public sealed class CoreTests
         if (valid) target.Validate(); else Assert.Throws<ArgumentException>(target.Validate);
         if (valid && mode == "follow") { Assert.Contains("userId=42", target.Query("tracker")); Assert.DoesNotContain("placeId", target.Query("tracker")); }
     }
-    [Fact] public void PasswordArtifactsAreDiscardedOnLoadAndImport()
+    [Fact] public void PasswordsAreExcludedFromSessionRecordsOnLoadAndImport()
     {
         const string secret = "synthetic-old-password";
         var account = Json.Read<Account>("{\"userId\":42,\"username\":\"test\",\"securityToken\":\"synthetic_cookie_for_tests_only_123456\",\"password\":\"" + secret + "\"}");

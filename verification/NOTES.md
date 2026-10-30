@@ -1,4 +1,10 @@
-# Current verification (0.3.2)
+# Current verification (0.3.3)
+
+29 October 2026. RAM account imports now extract nonempty saved Password fields into a separate native password review, then store selected logins in CredentialVault with their original account ID association. Password strings preserve their original characters. Session records remain free of password properties. Re-import works for existing account-table entries; exact named-login duplicates stay unchanged and distinct variants remain separate. The completion dialog and Activity report account/password counts separately. Ordinary Orbit account backups still exclude the separate password store.
+
+Validation: 82 xUnit cases passed with native UI enabled; two opt-in live integration cases skipped. New coverage checks JSON and machine-DPAPI imports, an independently generated synthetic Argon2i/secretbox encrypted RAM fixture, wrong-password/tamper rejection, whitespace/blank-line/Unicode password preservation through encrypted storage reload, re-import with already-existing accounts, retained password variants, invalid account/password validation before writes, and an unavailable password vault. Native RAM review rendering and the ability to import accounts with all password rows deselected or duplicate were checked. The new feature was tested using synthetic data; no real password import or sign-in was performed. Both stores validate selected records before their respective writes; this is not a cross-file disk transaction.
+
+# Verification (0.3.2)
 
 29 October 2026. Reworked import selection to handle checkbox content clicks and Space explicitly, without relying on the grid entering edit mode. Valid username/password rows with unrecognized websites can now be selected manually; they remain unchecked by default. Exact duplicates and rows missing required credentials remain disabled. The preview shows actual source domains/app identifiers rather than a generic non-Roblox label, excluding embedded credentials, paths, query strings and fragments. Automatic matching also recognizes the official Roblox Android URI and DNS names with a trailing dot. The user's specific rejected URL was not available, so its cause is not claimed as confirmed.
 

@@ -6,12 +6,17 @@ using System.Text.Json;
 
 namespace Orbit;
 
+public sealed record AccountImportData(List<Account> Accounts, List<SavedLogin> Logins);
+public sealed record AccountImportResult(int AccountsAdded, int PasswordsAdded);
+
 public static class LegacyImport
 {
-    public static List<Account> Read(byte[] bytes, string password)
+    // Compatibility projection for callers that need only session records.
+    public static List<Account> Read(byte[] bytes, string password) => ReadContents(bytes, password).Accounts;
+    public static AccountImportData ReadContents(byte[] bytes, string password)
     {
         if (bytes.Length > 32 * 1024 * 1024) throw new InvalidDataException("Import file is too large.");
-        if (bytes.AsSpan().StartsWith("ORBIT01\n"u8)) return Vault.DecodeBackup(bytes, password).Accounts;
+        if (bytes.AsSpan().StartsWith("ORBIT01\n"u8)) return new(Vault.DecodeBackup(bytes, password).Accounts, []);
         byte[] plain = bytes;
         if (bytes.AsSpan().StartsWith("Roblox Account Manager created by"u8)) plain = SodiumDecrypt(bytes, password);
         else if (!Encoding.UTF8.GetString(bytes).TrimStart().StartsWith('['))
@@ -23,7 +28,7 @@ public static class LegacyImport
         try
         {
             var items = JsonNode.Parse(plain)?.AsArray() ?? throw new InvalidDataException("Expected an account list.");
-            return items.Select(node => new Account
+            var accounts = items.Select(node => new Account
             {
                 UserId = node?["UserID"]?.GetValue<long>() ?? node?["userId"]?.GetValue<long>() ?? 0,
                 Username = node?["Username"]?.GetValue<string>() ?? node?["username"]?.GetValue<string>() ?? "",
@@ -32,8 +37,31 @@ public static class LegacyImport
                 Group = node?["Group"]?.GetValue<string>() ?? "Default",
                 Fields = node?["Fields"]?.Deserialize<Dictionary<string, string>>(Json.Options) ?? []
             }).ToList();
+            var logins = new List<SavedLogin>();
+            for (int i = 0; i < items.Count; i++)
+            {
+                string secret = items[i]?["Password"]?.GetValue<string>() ?? items[i]?["password"]?.GetValue<string>() ?? "";
+                if (secret.Length == 0) continue;
+                var account = accounts[i];
+                string name = string.IsNullOrWhiteSpace(account.Alias) ? account.Username : account.Alias;
+                logins.Add(new() { Name = name.Length > 200 ? name[..200] : name, Username = account.Username, Password = secret, LinkedUserId = account.UserId });
+            }
+            return new(accounts, logins);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            throw new InvalidDataException("The account file has invalid account or password fields. Nothing was imported.");
         }
         finally { if (!ReferenceEquals(plain, bytes)) CryptographicOperations.ZeroMemory(plain); }
+    }
+    public static AccountImportResult Apply(Vault vault, CredentialVault credentials, AccountImportData data)
+    {
+        // Validate sessions before any password write. Password import validates
+        // every selected login before replacing its encrypted store.
+        Vault.PrepareMerge(data.Accounts);
+        int passwords = data.Logins.Count == 0 ? 0 : credentials.Import(data.Logins, preserveLinks: true);
+        int accounts = vault.Merge(data.Accounts);
+        return new(accounts, passwords);
     }
     private static byte[] SodiumDecrypt(byte[] bytes, string password)
     {

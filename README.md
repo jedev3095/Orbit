@@ -17,7 +17,7 @@ Choose **Add account**:
 
 Select exactly one account and choose **Open browser** above the table to browse using that saved session. Repeating the action brings its account window forward. An expired or revoked session requires signing in again; re-adding the same user refreshes its session while retaining aliases, groups and notes.
 
-Game launching still uses `.ROBLOSECURITY`. Passwords deliberately saved in the new local password manager live in a separate encrypted store; unused password fields in legacy account imports are still discarded.
+Game launching still uses `.ROBLOSECURITY`. Passwords deliberately saved in the new local password manager live in a separate encrypted store; saved passwords found in original RAM account imports can be reviewed and copied into that separate store. Passwords are never added to session records or the local API.
 
 ## Local password manager
 
@@ -57,7 +57,7 @@ Each vault save retains a previous `vault.dat.backup`. If the primary vault cann
 
 **Settings → Set up daily backups** is opt-in. Choose a folder and a password of at least 12 characters. Orbit creates encrypted exports daily while open, catching up on its next startup when due, and keeps the latest seven exports belonging to that configured schedule. The schedule password is DPAPI-protected locally and is excluded from the account vault and its portable exports. Back up now and Disable schedule are also available. Keep your own copy of the password for recovery elsewhere.
 
-Portable exports use PBKDF2-SHA256 (600,000 iterations) and AES-256-GCM. They contain the database snapshot, including games and settings. **The ordinary Import dialog merges accounts only; it leaves games and settings unchanged.** This limitation is shown before choosing the file. Existing old JSON/DPAPI/password-encrypted AccountData formats remain supported. Files needing the original Windows account must be imported there. Removing an account from the vault does not remove its browser profile or historical backups.
+Portable exports use PBKDF2-SHA256 (600,000 iterations) and AES-256-GCM. They contain the database snapshot, including games and settings. **The ordinary Import dialog merges accounts and leaves games and settings unchanged.** For original RAM files it also offers a native review of any saved passwords, importing selected entries into the separate encrypted local password manager. Existing passwords are not overwritten; distinct variants remain selectable. Account records without a saved password remain session-only. Re-import the original RAM file to recover passwords from accounts already in Orbit; the completion dialog reports account and password counts separately. Orbit account backups do not include the separate password store: use an encrypted password export or the paired daily backups for those logins. This limitation is shown before choosing the file. Existing old JSON/DPAPI/password-encrypted AccountData formats remain supported. Files needing the original Windows account must be imported there. Removing an account from the vault does not remove its browser profile or historical backups.
 
 ## Local control API
 

@@ -111,11 +111,11 @@ internal sealed class CredentialImportPreview : Form
     {
         get { grid.EndEdit(); return grid.Rows.Cast<DataGridViewRow>().Where(r => r.Cells[0].Value is true && r.Tag is SavedLogin).Select(r => (SavedLogin)r.Tag!).ToList(); }
     }
-    public CredentialImportPreview(CredentialImportPlan plan, CredentialVault? store = null, bool preserveLinks = false)
+    public CredentialImportPreview(CredentialImportPlan plan, CredentialVault? store = null, bool preserveLinks = false, int? accountCount = null)
     {
-        PasswordUi.Theme(this); Text = "Review password import"; Size = new(1000, 570); MinimumSize = new(760, 440);
+        PasswordUi.Theme(this); Text = accountCount is null ? "Review password import" : "Review RAM account and password import"; Size = new(1000, 570); MinimumSize = new(760, 440);
         grid.ReadOnly = false; grid.EditMode = DataGridViewEditMode.EditProgrammatically; grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "include", HeaderText = "Import", FillWeight = 45 });
-        foreach (var (key, title) in new[] { ("row", "CSV record"), ("name", "Name"), ("username", "Username / email"), ("website", "Website"), ("status", "Import status / reason") }) { int index = grid.Columns.Add(key, title); grid.Columns[index].ReadOnly = true; }
+        foreach (var (key, title) in new[] { ("row", accountCount is null ? "CSV record" : "Login"), ("name", "Name"), ("username", "Username / email"), ("website", "Website"), ("status", "Import status / reason") }) { int index = grid.Columns.Add(key, title); grid.Columns[index].ReadOnly = true; }
         grid.Columns["row"].FillWeight = 55; grid.Columns["status"].FillWeight = 180;
         var rows = plan.Rows ?? plan.Logins.Select((entry, i) => new CredentialImportRow(i + 1, entry, entry.Name, entry.Username, "roblox.com", "Login", true, true)).ToList();
         var seen = store?.List().ToList() ?? [];
@@ -128,9 +128,10 @@ internal sealed class CredentialImportPreview : Form
             if (item.Login is not null && item.Selected && !duplicate) seen.Add(item.Login);
         }
         var message = new Label { Dock = DockStyle.Top, Height = 105, Padding = new(12), Text = $"{rows.Count} records reviewed; {plan.Logins.Count} matched Roblox automatically. Every excluded record has a reason below.\nUnrecognized/missing websites stay unchecked: tick only logins you know belong to Roblox. Different passwords/names stay separate; existing passwords are never overwritten.\nPasswords are hidden. Notes, passkeys and TOTP are not imported. CSV originals remain plaintext and unchanged." };
+        if (accountCount is not null) message.Text = $"{accountCount} account records. Saved passwords found: {plan.Logins.Count}. Review the passwords selected below.\nAccounts will be merged even if no passwords are selected. Accounts without a saved password remain session-only.\nSelected passwords go into the encrypted local password manager. Existing passwords are kept; different versions stay separate.\nPasswords are hidden. The original file is unchanged.";
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 46, FlowDirection = FlowDirection.RightToLeft };
-        var import = PasswordUi.Button("Import selected encrypted", () => DialogResult = DialogResult.OK); buttons.Controls.Add(import); buttons.Controls.Add(PasswordUi.Button("Cancel", () => Close()));
-        void UpdateButton() => import.Enabled = SelectedLogins.Count > 0;
+        var import = PasswordUi.Button(accountCount is null ? "Import selected encrypted" : "Import accounts + selected logins", () => DialogResult = DialogResult.OK); buttons.Controls.Add(import); buttons.Controls.Add(PasswordUi.Button("Cancel", () => Close()));
+        void UpdateButton() => import.Enabled = accountCount is not null || SelectedLogins.Count > 0;
         void Toggle(int rowIndex)
         {
             if (rowIndex < 0 || rowIndex >= grid.Rows.Count) return;

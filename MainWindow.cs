@@ -159,8 +159,18 @@ public sealed class MainWindow : Form
         if (dialog.ShowDialog(this) != DialogResult.OK) return null;
         if (new FileInfo(dialog.FileName).Length > 32 * 1024 * 1024) throw new InvalidDataException("Import file is too large.");
         var bytes = File.ReadAllBytes(dialog.FileName);
-        var imported = LegacyImport.Read(bytes, p.TryGetProperty("password", out var password) ? password.GetString() ?? "" : "");
-        int count = app.Vault.Merge(imported); app.Log($"Imported {count} new accounts; matching sessions were refreshed."); return new { count };
+        var imported = LegacyImport.ReadContents(bytes, p.TryGetProperty("password", out var password) ? password.GetString() ?? "" : "");
+        int passwordsFound = imported.Logins.Count;
+        if (passwordsFound > 0)
+        {
+            using var preview = new CredentialImportPreview(new(imported.Logins, 0), app.Credentials, preserveLinks: true, accountCount: imported.Accounts.Count);
+            if (preview.ShowDialog(this) != DialogResult.OK) return null;
+            imported = imported with { Logins = preview.SelectedLogins };
+        }
+        var result = LegacyImport.Apply(app.Vault, app.Credentials, imported);
+        app.Log($"Imported {result.AccountsAdded} new accounts; matching sessions were refreshed. Added {result.PasswordsAdded} saved passwords to the encrypted password manager.");
+        MessageBox.Show(this, $"Added {result.AccountsAdded} new accounts; existing account sessions were refreshed.\nFound {passwordsFound} saved passwords; added {result.PasswordsAdded} to the encrypted password manager. Exact duplicates were kept unchanged.\n\nOpen Settings → Password manager / CSV import to use saved logins. The original file was not changed.", "Import complete");
+        return new { count = result.AccountsAdded, passwordsFound, passwordsAdded = result.PasswordsAdded };
     }
     private object? Export(JsonElement p)
     {

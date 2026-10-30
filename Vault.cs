@@ -74,7 +74,7 @@ public sealed class Vault
         if (File.Exists(FilePath)) File.Copy(FilePath, FilePath + ".unreadable-" + Guid.NewGuid().ToString("N"));
         File.WriteAllBytes(FilePath + ".restore", bytes); File.Move(FilePath + ".restore", FilePath, true); Data = recovered;
     }
-    public int Merge(IEnumerable<Account> accounts)
+    internal static List<Account> PrepareMerge(IEnumerable<Account> accounts)
     {
         var incoming = accounts.ToList();
         foreach (var a in incoming)
@@ -84,6 +84,11 @@ public sealed class Vault
             a.Group = string.IsNullOrWhiteSpace(a.Group) ? "Default" : a.Group;
             a.Fields ??= [];
         }
+        return incoming;
+    }
+    public int Merge(IEnumerable<Account> accounts)
+    {
+        var incoming = PrepareMerge(accounts);
         int added = 0;
         foreach (var a in incoming)
         {
