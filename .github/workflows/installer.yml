@@ -1,0 +1,35 @@
+name: Build offline installer
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+      - name: Download verified portable NSIS and Microsoft WebView2
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tools = Join-Path $env:RUNNER_TEMP 'orbit-installer-tools'
+          New-Item -ItemType Directory -Path $tools -Force | Out-Null
+          $archive = Join-Path $tools 'nsis-3.13.zip'
+          Invoke-WebRequest 'https://master.dl.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13.zip?viasf=1' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive).Hash -ne 'BA63DFFC4410EE89193E1CB5A41989991BD77C61068DA17E3156D136B7B0B3D8') { throw 'Portable NSIS archive verification failed.' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $tools
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/?linkid=2124701' -OutFile (Join-Path $tools 'MicrosoftEdgeWebView2RuntimeInstallerX64.exe')
+      - name: Build and verify installer
+        shell: pwsh
+        run: |
+          ./installer/build.ps1 -NsisPath "$env:RUNNER_TEMP/orbit-installer-tools/nsis-3.13/makensis.exe" -WebViewInstaller "$env:RUNNER_TEMP/orbit-installer-tools/MicrosoftEdgeWebView2RuntimeInstallerX64.exe" -OutputDirectory artifacts -Verify
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: Orbit-offline-installer-win-x64
+          path: artifacts/Orbit-Setup-*
+          if-no-files-found: error

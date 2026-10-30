@@ -2,6 +2,18 @@
 
 A Windows Roblox account manager with a charcoal WebView2 dashboard, an encrypted local vault and separate account browser sessions. The interface is styled after Relay. Orbit is an independent application, unaffiliated with Roblox.
 
+
+## Install or share
+
+Two Windows x64 packages are available on [Releases](https://github.com/jedev3095/Orbit/releases/latest):
+
+- **Orbit-Setup-0.3.4-x64.exe** is a single offline installer. It bundles Orbit, .NET 8 and Microsoft's full WebView2 installer. Setup installs for the current Windows user, adds a Start menu entry and offers a desktop shortcut. Close Orbit before installing or uninstalling. Uninstalling keeps saved accounts, passwords, browser profiles and backups.
+- **Orbit-app-0.3.4.zip** is the smaller folder package. Extract everything and run Orbit.exe. It requires the .NET 8 Desktop Runtime and WebView2 Runtime to be installed separately.
+
+Neither package contains personal accounts or credentials. Orbit's installer is currently unsigned. The bundled WebView2 prerequisite is Microsoft-signed and is installed only if the runtime is missing. See [Microsoft's WebView2 distribution guidance](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution). Runtime files are included for setup; signing in and using Roblox still require an internet connection.
+
+Installer build and verification instructions are in [installer/README.md](installer/README.md).
+
 ## Run
 
 Download the app ZIP from Releases, extract the **entire archive** into one folder and run `Orbit.exe`. Keep the DLLs and `ui` folder beside it. Requires .NET Desktop Runtime 8 and Microsoft Edge WebView2 Runtime. Local published builds belong in `app/` or `publish/`; they are ignored by Git.

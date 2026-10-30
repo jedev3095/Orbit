@@ -31,3 +31,6 @@ logins.dat*
 **/TestResults/
 verification/**/*.png
 verification/*.png
+
+# Installer artifacts
+artifacts/

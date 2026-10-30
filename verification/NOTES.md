@@ -1,4 +1,12 @@
-# Current verification (0.3.4)
+# Current verification (0.3.4 installer)
+
+30 October 2026. Added a single-file per-user Windows x64 installer as an alternative to the portable ZIP. It bundles a self-contained .NET 8.0.33 publish and Microsoft's signed Evergreen WebView2 Standalone Installer. Setup checks existing WebView2 registration before running the bundled prerequisite, creates Start menu entries, offers an optional desktop shortcut and registers uninstall. Setup/uninstall reject a running Orbit instance. Uninstall uses a generated explicit file list, with no recursive deletion or account-data removal.
+
+Built using the portable NSIS 3.13 archive verified against the SHA-256 published by its primary download host. The WebView2 payload had a valid Microsoft Corporation Authenticode signature. The resulting Orbit setup EXE is unsigned. Local verification passed two complete clean install/reinstall/uninstall cycles: all 474 published files matched installed hashes, registration and the Start menu shortcut were correct, the desktop shortcut stayed off by default, the running-app guard refused setup, and unknown synthetic files plus existing account-data files were preserved. An initial reinstall assertion failed without a confirmed cause; it was not reproduced in two direct reinstalls or the subsequent clean cycles. All temporary test registration and shortcuts were removed.
+
+The PC already had WebView2, so the missing-runtime installation branch was not live-tested. The complete Microsoft offline prerequisite is embedded and signature checked during build, with post-install registration checked before Orbit is installed. No game clients or real sign-ins were used for installer verification. Application code is unchanged from 0.3.4; installer build/verification scripts and a manually triggered Windows CI workflow are included.
+
+# Verification (0.3.4)
 
 30 October 2026. Added Accounts → Refresh expired accounts. The native queue checks sessions, refreshes only expired/mismatched sessions with an unambiguous saved login, and opens one sign-in browser at a time. It uses the existing restricted autofill and expected-user-ID session validation. The dashboard exposes counts and progress only; credentials remain native. Missing/ambiguous credentials are skipped, a browser close skips its account, five-minute cancellation advances the queue, and session-check rate limiting stops it. Skip/Stop controls are available in both the browser and dashboard. Batch acceptance does not reset account selection or filters.
 
